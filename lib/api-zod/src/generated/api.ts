@@ -28,12 +28,13 @@ export const ListSeatsResponseItem = zod.object({
   "id": zod.number(),
   "seatNumber": zod.number(),
   "section": zod.string().describe('AC or NON_AC'),
+  "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
-  "isUnderMaintenance": zod.boolean(),
-  "price": zod.number(),
+  "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
-  "bookingId": zod.number().nullish().describe('Booking ID if booked for the queried month'),
-  "bookedByName": zod.string().nullish().describe('Name of the person who booked (admin view)')
+  "bookingId": zod.number().nullish(),
+  "bookedByName": zod.string().nullish()
 })
 export const ListSeatsResponse = zod.array(ListSeatsResponseItem)
 
@@ -49,36 +50,38 @@ export const GetSeatResponse = zod.object({
   "id": zod.number(),
   "seatNumber": zod.number(),
   "section": zod.string().describe('AC or NON_AC'),
+  "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
-  "isUnderMaintenance": zod.boolean(),
-  "price": zod.number(),
+  "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
-  "bookingId": zod.number().nullish().describe('Booking ID if booked for the queried month'),
-  "bookedByName": zod.string().nullish().describe('Name of the person who booked (admin view)')
+  "bookingId": zod.number().nullish(),
+  "bookedByName": zod.string().nullish()
 })
 
 
 /**
- * @summary Admin - toggle seat maintenance status
+ * @summary Admin - toggle seat offline booking status
  */
 export const UpdateSeatParams = zod.object({
   "id": zod.coerce.number()
 })
 
 export const UpdateSeatBody = zod.object({
-  "isUnderMaintenance": zod.boolean().optional()
+  "isOfflineBooked": zod.boolean().optional()
 })
 
 export const UpdateSeatResponse = zod.object({
   "id": zod.number(),
   "seatNumber": zod.number(),
   "section": zod.string().describe('AC or NON_AC'),
+  "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
-  "isUnderMaintenance": zod.boolean(),
-  "price": zod.number(),
+  "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
-  "bookingId": zod.number().nullish().describe('Booking ID if booked for the queried month'),
-  "bookedByName": zod.string().nullish().describe('Name of the person who booked (admin view)')
+  "bookingId": zod.number().nullish(),
+  "bookedByName": zod.string().nullish()
 })
 
 
@@ -97,7 +100,9 @@ export const ListBookingsResponseItem = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "customerEmail": zod.string().nullish(),
-  "month": zod.string().describe('YYYY-MM format'),
+  "month": zod.string().describe('YYYY-MM start month'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking'),
+  "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
   "paymentSessionId": zod.string().nullish(),
@@ -113,14 +118,15 @@ export const createBookingBodyCustomerNameMin = 2;
 
 export const createBookingBodyCustomerPhoneMin = 10;
 
-
+export const createBookingBodyDurationMonthsDefault = 1;
 
 export const CreateBookingBody = zod.object({
   "seatId": zod.number(),
   "customerName": zod.string().min(createBookingBodyCustomerNameMin),
   "customerPhone": zod.string().min(createBookingBodyCustomerPhoneMin),
   "customerEmail": zod.string().optional(),
-  "month": zod.string().describe('YYYY-MM format')
+  "month": zod.string().describe('YYYY-MM start month'),
+  "durationMonths": zod.number().default(createBookingBodyDurationMonthsDefault).describe('1, 2, 3, or 6 — defaults to 1')
 })
 
 
@@ -139,7 +145,9 @@ export const GetBookingResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "customerEmail": zod.string().nullish(),
-  "month": zod.string().describe('YYYY-MM format'),
+  "month": zod.string().describe('YYYY-MM start month'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking'),
+  "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
   "paymentSessionId": zod.string().nullish(),
@@ -166,7 +174,9 @@ export const UpdateBookingResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "customerEmail": zod.string().nullish(),
-  "month": zod.string().describe('YYYY-MM format'),
+  "month": zod.string().describe('YYYY-MM start month'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking'),
+  "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
   "paymentSessionId": zod.string().nullish(),
@@ -227,7 +237,9 @@ export const ConfirmPaymentResponse = zod.object({
   "customerName": zod.string(),
   "customerPhone": zod.string(),
   "customerEmail": zod.string().nullish(),
-  "month": zod.string().describe('YYYY-MM format'),
+  "month": zod.string().describe('YYYY-MM start month'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking'),
+  "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
   "paymentSessionId": zod.string().nullish(),
@@ -240,24 +252,45 @@ export const ConfirmPaymentResponse = zod.object({
  */
 export const GetPricingResponse = zod.object({
   "id": zod.number(),
-  "acPrice": zod.number(),
-  "nonAcPrice": zod.number(),
+  "acPrice1m": zod.number(),
+  "acPrice2m": zod.number(),
+  "acPrice3m": zod.number(),
+  "acPrice6m": zod.number(),
+  "nonAcPrice1m": zod.number(),
+  "nonAcPrice2m": zod.number(),
+  "nonAcPrice3m": zod.number(),
+  "nonAcPrice6m": zod.number(),
+  "room2IsAc": zod.boolean(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Admin - update pricing
+ * @summary Admin - update pricing and room settings
  */
 export const UpdatePricingBody = zod.object({
-  "acPrice": zod.number().optional(),
-  "nonAcPrice": zod.number().optional()
+  "acPrice1m": zod.number().optional(),
+  "acPrice2m": zod.number().optional(),
+  "acPrice3m": zod.number().optional(),
+  "acPrice6m": zod.number().optional(),
+  "nonAcPrice1m": zod.number().optional(),
+  "nonAcPrice2m": zod.number().optional(),
+  "nonAcPrice3m": zod.number().optional(),
+  "nonAcPrice6m": zod.number().optional(),
+  "room2IsAc": zod.boolean().optional()
 })
 
 export const UpdatePricingResponse = zod.object({
   "id": zod.number(),
-  "acPrice": zod.number(),
-  "nonAcPrice": zod.number(),
+  "acPrice1m": zod.number(),
+  "acPrice2m": zod.number(),
+  "acPrice3m": zod.number(),
+  "acPrice6m": zod.number(),
+  "nonAcPrice1m": zod.number(),
+  "nonAcPrice2m": zod.number(),
+  "nonAcPrice3m": zod.number(),
+  "nonAcPrice6m": zod.number(),
+  "room2IsAc": zod.boolean(),
   "updatedAt": zod.string()
 })
 

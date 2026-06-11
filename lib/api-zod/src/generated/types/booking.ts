@@ -15,8 +15,12 @@ export interface Booking {
   customerPhone: string;
   /** @nullable */
   customerEmail?: string | null;
-  /** YYYY-MM format */
+  /** YYYY-MM start month */
   month: string;
+  /** YYYY-MM last month of booking */
+  endMonth: string;
+  /** 1, 2, 3, or 6 */
+  durationMonths: number;
   amount: number;
   /** pending | confirmed | cancelled */
   status: string;

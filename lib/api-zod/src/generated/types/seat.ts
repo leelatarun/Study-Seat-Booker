@@ -11,22 +11,20 @@ export interface Seat {
   seatNumber: number;
   /** AC or NON_AC */
   section: string;
+  /** 1=AC room, 2=Non-AC/switchable room, 3=Common area */
+  room: number;
   isAC: boolean;
-  isUnderMaintenance: boolean;
+  /** True if seat was booked offline at the admin desk */
+  isOfflineBooked: boolean;
+  /** 1-month price for this seat */
   price: number;
   /**
      * True if this seat is booked for the queried month
      * @nullable
      */
   bookedForMonth?: boolean | null;
-  /**
-     * Booking ID if booked for the queried month
-     * @nullable
-     */
+  /** @nullable */
   bookingId?: number | null;
-  /**
-     * Name of the person who booked (admin view)
-     * @nullable
-     */
+  /** @nullable */
   bookedByName?: string | null;
 }

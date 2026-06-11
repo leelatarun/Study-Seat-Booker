@@ -2,6 +2,11 @@ import { useParams, useLocation } from "wouter";
 import { useGetBooking, getGetBookingQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 
+function monthLabel(ym: string) {
+  const [y, m] = ym.split("-");
+  return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+}
+
 export default function Confirmation() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const [, navigate] = useLocation();
@@ -14,7 +19,7 @@ export default function Confirmation() {
   if (isLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-muted-foreground">Loading confirmation...</div>
+        <div className="text-gray-400">Loading confirmation...</div>
       </div>
     );
   }
@@ -23,71 +28,72 @@ export default function Confirmation() {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-destructive mb-4">Booking not found.</p>
+          <p className="text-red-500 mb-4">Booking not found.</p>
           <Button variant="outline" onClick={() => navigate("/")}>Back to Home</Button>
         </div>
       </div>
     );
   }
 
-  const monthLabel = (() => {
-    const [y, m] = booking.month.split("-");
-    return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
-  })();
+  const isMultiMonth = booking.durationMonths > 1;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-gray-50">
       <div className="w-full max-w-lg">
-        <div className="border border-border rounded-2xl overflow-hidden bg-card shadow-2xl">
-          <div className="p-8 text-center border-b border-border">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/10 border-2 border-green-500/30 mb-4">
-              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        <div className="rounded-2xl overflow-hidden bg-white shadow-md border border-gray-100">
+          {/* Success banner */}
+          <div className="p-8 text-center border-b border-gray-100 bg-green-50">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 border-2 border-green-200 mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-1">Booking Confirmed!</h1>
-            <p className="text-muted-foreground text-sm">Your cabin is reserved and ready for you.</p>
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">Booking Confirmed!</h1>
+            <p className="text-gray-500 text-sm">Your cabin is reserved and ready for you.</p>
           </div>
 
           <div className="p-6 space-y-4">
-            <div className="bg-background rounded-xl p-5 space-y-3 border border-border">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Booking ID</span>
-                <span className="font-mono font-semibold text-foreground">#{booking.id.toString().padStart(6, "0")}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Cabin</span>
-                <span className="font-semibold text-foreground">Seat {booking.seatNumber}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Section</span>
-                <span className="font-semibold text-foreground">{booking.section === "AC" ? "AC Section" : "Non-AC Section"}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Month</span>
-                <span className="font-semibold text-foreground">{monthLabel}</span>
-              </div>
-              <div className="border-t border-border pt-3 flex items-center justify-between">
-                <span className="text-muted-foreground text-sm">Amount Paid</span>
+            {/* Booking details */}
+            <div className="bg-gray-50 rounded-xl p-5 space-y-3 border border-gray-100">
+              {[
+                { label: "Booking ID", value: `#${booking.id.toString().padStart(6, "0")}` },
+                { label: "Cabin", value: `Seat ${booking.seatNumber}` },
+                { label: "Section", value: booking.section === "AC" ? "AC (Room 1)" : "Non-AC" },
+                {
+                  label: isMultiMonth ? "Period" : "Month",
+                  value: isMultiMonth
+                    ? `${monthLabel(booking.month)} → ${monthLabel(booking.endMonth)}`
+                    : monthLabel(booking.month),
+                },
+                ...(isMultiMonth ? [{ label: "Duration", value: `${booking.durationMonths} months` }] : []),
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">{label}</span>
+                  <span className="font-semibold text-gray-700">{value}</span>
+                </div>
+              ))}
+              <div className="border-t border-gray-200 pt-3 flex items-center justify-between">
+                <span className="text-gray-500 text-sm">Amount Paid</span>
                 <span className="text-xl font-bold text-primary">₹{Number(booking.amount).toLocaleString("en-IN")}</span>
               </div>
             </div>
 
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
-              <p className="font-semibold text-foreground text-sm mb-2">Student Details</p>
-              <p className="text-sm text-muted-foreground">{booking.customerName}</p>
-              <p className="text-sm text-muted-foreground">{booking.customerPhone}</p>
+            {/* Student info */}
+            <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+              <p className="font-semibold text-gray-700 text-sm mb-2">Student Details</p>
+              <p className="text-sm text-gray-600">{booking.customerName}</p>
+              <p className="text-sm text-gray-500">{booking.customerPhone}</p>
               {booking.customerEmail && (
-                <p className="text-sm text-muted-foreground">{booking.customerEmail}</p>
+                <p className="text-sm text-gray-500">{booking.customerEmail}</p>
               )}
             </div>
 
-            <div className="text-center text-xs text-muted-foreground bg-muted rounded-lg px-4 py-3">
-              Please present this booking ID when you arrive. Contact us if you have any questions.
+            <div className="text-center text-xs text-gray-400 bg-gray-50 rounded-lg px-4 py-3 border border-gray-100">
+              Show this booking ID when you arrive. Your cabin will be marked available again after the booked period ends.
             </div>
 
             <Button className="w-full" onClick={() => navigate("/")}>
-              Book Another Seat
+              Book Another Cabin
             </Button>
           </div>
         </div>

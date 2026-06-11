@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function monthLabel(ym: string) {
+  const [y, m] = ym.split("-");
+  return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+}
+
 export default function Payment() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const [, navigate] = useLocation();
@@ -39,16 +44,14 @@ export default function Payment() {
     val.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
 
   const formatExpiry = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 4);
-    if (digits.length >= 3) return digits.slice(0, 2) + "/" + digits.slice(2);
-    return digits;
+    const d = val.replace(/\D/g, "").slice(0, 4);
+    return d.length >= 3 ? d.slice(0, 2) + "/" + d.slice(2) : d;
   };
 
   const handlePay = (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId || !booking) return;
     setError("");
-
     confirmPayment.mutate(
       {
         data: {
@@ -70,7 +73,7 @@ export default function Payment() {
   if (isLoading || !booking) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-muted-foreground">Loading payment details...</div>
+        <div className="text-gray-400">Loading payment details...</div>
       </div>
     );
   }
@@ -80,17 +83,14 @@ export default function Payment() {
     return null;
   }
 
-  const monthLabel = (() => {
-    const [y, m] = booking.month.split("-");
-    return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
-  })();
+  const isMultiMonth = booking.durationMonths > 1;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-gray-50">
       <div className="w-full max-w-lg">
         <button
           onClick={() => navigate("/")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors text-sm"
+          className="flex items-center gap-2 text-gray-400 hover:text-gray-700 mb-6 transition-colors text-sm"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -98,33 +98,36 @@ export default function Payment() {
           Back to Home
         </button>
 
-        <div className="border border-border rounded-2xl overflow-hidden bg-card shadow-2xl">
-          <div className="bg-primary/10 border-b border-primary/20 p-6">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Order Summary</p>
+        <div className="rounded-2xl overflow-hidden bg-white shadow-md border border-gray-100">
+          {/* Order summary */}
+          <div className="bg-green-50 border-b border-green-100 p-6">
+            <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Order Summary</p>
             <div className="flex justify-between items-start">
               <div>
-                <p className="font-semibold text-foreground">Seat {booking.seatNumber} — {booking.section === "AC" ? "AC Section" : "Non-AC Section"}</p>
-                <p className="text-sm text-muted-foreground mt-1">{monthLabel} · {booking.customerName}</p>
+                <p className="font-semibold text-gray-800">
+                  Seat {booking.seatNumber} — {booking.section === "AC" ? "AC" : "Non-AC"}
+                </p>
+                <p className="text-sm text-gray-500 mt-0.5">{booking.customerName}</p>
+                <p className="text-sm text-gray-400 mt-0.5">
+                  {isMultiMonth
+                    ? `${monthLabel(booking.month)} → ${monthLabel(booking.endMonth)} (${booking.durationMonths} months)`
+                    : monthLabel(booking.month)}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold text-primary">₹{Number(booking.amount).toLocaleString("en-IN")}</p>
-                <p className="text-xs text-muted-foreground">per month</p>
+                <p className="text-xs text-gray-400">total</p>
               </div>
             </div>
           </div>
 
-          <form onSubmit={handlePay} className="p-6 space-y-5">
-            <div>
-              <p className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-                Card Details
-                <span className="ml-auto text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Demo Mode</span>
-              </p>
+          <form onSubmit={handlePay} className="p-6 space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700">Card Details</p>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Demo Mode</span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="cardNumber">Card Number</Label>
               <Input
                 id="cardNumber"
@@ -132,11 +135,12 @@ export default function Payment() {
                 value={card.number}
                 onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
                 required
-                className="bg-background font-mono tracking-wider"
+                className="bg-gray-50 font-mono tracking-wider"
+                autoComplete="cc-number"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="cardName">Name on Card</Label>
               <Input
                 id="cardName"
@@ -144,13 +148,14 @@ export default function Payment() {
                 value={card.name}
                 onChange={(e) => setCard({ ...card, name: e.target.value })}
                 required
-                className="bg-background"
+                className="bg-gray-50"
+                autoComplete="cc-name"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="expiry">Expiry Date</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="expiry">Expiry</Label>
                 <Input
                   id="expiry"
                   placeholder="MM/YY"
@@ -158,10 +163,11 @@ export default function Payment() {
                   onChange={(e) => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
                   required
                   maxLength={5}
-                  className="bg-background font-mono"
+                  className="bg-gray-50 font-mono"
+                  autoComplete="cc-exp"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="cvv">CVV</Label>
                 <Input
                   id="cvv"
@@ -171,13 +177,14 @@ export default function Payment() {
                   onChange={(e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                   required
                   maxLength={4}
-                  className="bg-background font-mono"
+                  className="bg-gray-50 font-mono"
+                  autoComplete="cc-csc"
                 />
               </div>
             </div>
 
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3">
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                 {error}
               </div>
             )}
@@ -192,8 +199,8 @@ export default function Payment() {
                 : `Pay ₹${Number(booking.amount).toLocaleString("en-IN")}`}
             </Button>
 
-            <p className="text-center text-xs text-muted-foreground">
-              This is a demo payment. No real charges will be made.
+            <p className="text-center text-xs text-gray-400">
+              Demo payment — no real charges made.
             </p>
           </form>
         </div>

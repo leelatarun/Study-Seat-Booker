@@ -13,6 +13,8 @@ export interface BookingInput {
   /** @minLength 10 */
   customerPhone: string;
   customerEmail?: string;
-  /** YYYY-MM format */
+  /** YYYY-MM start month */
   month: string;
+  /** 1, 2, 3, or 6 — defaults to 1 */
+  durationMonths?: number;
 }

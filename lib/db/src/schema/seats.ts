@@ -6,8 +6,9 @@ export const seatsTable = pgTable("seats", {
   id: integer("id").primaryKey(),
   seatNumber: integer("seat_number").notNull(),
   section: text("section").notNull(), // "AC" or "NON_AC"
+  room: integer("room").notNull().default(1), // 1=AC, 2=Non-AC/AC-switchable, 3=Common
   isAC: boolean("is_ac").notNull().default(false),
-  isUnderMaintenance: boolean("is_under_maintenance").notNull().default(false),
+  isOfflineBooked: boolean("is_offline_booked").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, lte, gte, and } from "drizzle-orm";
 import { db, seatsTable, bookingsTable, pricingTable } from "@workspace/db";
 import {
   ListSeatsQueryParams,
@@ -10,38 +10,49 @@ import {
 
 const router: IRouter = Router();
 
+function computeEffectiveSection(seat: typeof seatsTable.$inferSelect, room2IsAc: boolean) {
+  if (seat.room === 1) return { section: "AC", isAC: true };
+  if (seat.room === 2) return room2IsAc ? { section: "AC", isAC: true } : { section: "NON_AC", isAC: false };
+  return { section: "NON_AC", isAC: false }; // room 3 = common, non-AC priced
+}
+
 router.get("/seats", async (req, res): Promise<void> => {
   const query = ListSeatsQueryParams.safeParse(req.query);
   const month = query.success ? query.data.month : undefined;
 
   const seats = await db.select().from(seatsTable).orderBy(seatsTable.id);
+  const pricingRow = await db.select().from(pricingTable).limit(1);
+  const pricing = pricingRow[0];
+  const room2IsAc = pricing?.room2IsAc ?? false;
+  const acPrice = pricing?.acPrice1m ?? 2000;
+  const nonAcPrice = pricing?.nonAcPrice1m ?? 1500;
 
-  const pricing = await db.select().from(pricingTable).limit(1);
-  const acPrice = pricing[0] ? Number(pricing[0].acPrice) : 2000;
-  const nonAcPrice = pricing[0] ? Number(pricing[0].nonAcPrice) : 1500;
-
-  let bookingsForMonth: Array<{ seatId: number; id: number; customerName: string }> = [];
+  let activeBookings: Array<{ seatId: number; id: number; customerName: string }> = [];
   if (month) {
-    const rawBookings = await db
+    activeBookings = await db
       .select({ seatId: bookingsTable.seatId, id: bookingsTable.id, customerName: bookingsTable.customerName })
       .from(bookingsTable)
-      .where(eq(bookingsTable.month, month));
-    bookingsForMonth = rawBookings.filter((b) => {
-      const matchingSeat = seats.find(s => s.id === b.seatId);
-      return matchingSeat !== undefined;
-    });
+      .where(
+        and(
+          lte(bookingsTable.month, month),
+          gte(bookingsTable.endMonth, month),
+          eq(bookingsTable.status, "confirmed")
+        )
+      );
   }
 
   const result = seats.map((seat) => {
-    const booking = month ? bookingsForMonth.find((b) => b.seatId === seat.id) : undefined;
+    const effective = computeEffectiveSection(seat, room2IsAc);
+    const booking = month ? activeBookings.find((b) => b.seatId === seat.id) : undefined;
     return {
       id: seat.id,
       seatNumber: seat.seatNumber,
-      section: seat.section,
-      isAC: seat.isAC,
-      isUnderMaintenance: seat.isUnderMaintenance,
-      price: seat.isAC ? acPrice : nonAcPrice,
-      bookedForMonth: month ? !!booking : null,
+      section: effective.section,
+      room: seat.room,
+      isAC: effective.isAC,
+      isOfflineBooked: seat.isOfflineBooked,
+      price: effective.isAC ? acPrice : nonAcPrice,
+      bookedForMonth: month ? (!!booking || seat.isOfflineBooked) : null,
       bookingId: booking ? booking.id : null,
       bookedByName: booking ? booking.customerName : null,
     };
@@ -50,7 +61,7 @@ router.get("/seats", async (req, res): Promise<void> => {
   res.json(result);
 });
 
-router.get("/seats/summary", async (req, res): Promise<void> => {
+router.get("/seats/summary", async (_req, res): Promise<void> => {
   res.status(200).json({});
 });
 
@@ -61,9 +72,11 @@ router.get("/seats/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const pricing = await db.select().from(pricingTable).limit(1);
-  const acPrice = pricing[0] ? Number(pricing[0].acPrice) : 2000;
-  const nonAcPrice = pricing[0] ? Number(pricing[0].nonAcPrice) : 1500;
+  const pricingRow = await db.select().from(pricingTable).limit(1);
+  const pricing = pricingRow[0];
+  const room2IsAc = pricing?.room2IsAc ?? false;
+  const acPrice = pricing?.acPrice1m ?? 2000;
+  const nonAcPrice = pricing?.nonAcPrice1m ?? 1500;
 
   const seat = await db.select().from(seatsTable).where(eq(seatsTable.id, params.data.id)).limit(1);
   if (!seat[0]) {
@@ -71,9 +84,15 @@ router.get("/seats/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const effective = computeEffectiveSection(seat[0], room2IsAc);
   res.json({
-    ...seat[0],
-    price: seat[0].isAC ? acPrice : nonAcPrice,
+    id: seat[0].id,
+    seatNumber: seat[0].seatNumber,
+    section: effective.section,
+    room: seat[0].room,
+    isAC: effective.isAC,
+    isOfflineBooked: seat[0].isOfflineBooked,
+    price: effective.isAC ? acPrice : nonAcPrice,
     bookedForMonth: null,
     bookingId: null,
     bookedByName: null,
@@ -99,13 +118,15 @@ router.patch("/seats/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const pricing = await db.select().from(pricingTable).limit(1);
-  const acPrice = pricing[0] ? Number(pricing[0].acPrice) : 2000;
-  const nonAcPrice = pricing[0] ? Number(pricing[0].nonAcPrice) : 1500;
+  const pricingRow = await db.select().from(pricingTable).limit(1);
+  const pricing = pricingRow[0];
+  const room2IsAc = pricing?.room2IsAc ?? false;
+  const acPrice = pricing?.acPrice1m ?? 2000;
+  const nonAcPrice = pricing?.nonAcPrice1m ?? 1500;
 
   const [updated] = await db
     .update(seatsTable)
-    .set({ isUnderMaintenance: body.data.isUnderMaintenance })
+    .set({ isOfflineBooked: body.data.isOfflineBooked })
     .where(eq(seatsTable.id, params.data.id))
     .returning();
 
@@ -114,9 +135,15 @@ router.patch("/seats/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const effective = computeEffectiveSection(updated, room2IsAc);
   res.json({
-    ...updated,
-    price: updated.isAC ? acPrice : nonAcPrice,
+    id: updated.id,
+    seatNumber: updated.seatNumber,
+    section: effective.section,
+    room: updated.room,
+    isAC: effective.isAC,
+    isOfflineBooked: updated.isOfflineBooked,
+    price: effective.isAC ? acPrice : nonAcPrice,
     bookedForMonth: null,
     bookingId: null,
     bookedByName: null,

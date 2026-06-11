@@ -7,5 +7,5 @@
  */
 
 export interface SeatUpdate {
-  isUnderMaintenance?: boolean;
+  isOfflineBooked?: boolean;
 }

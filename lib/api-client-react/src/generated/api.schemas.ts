@@ -14,28 +14,26 @@ export interface Seat {
   seatNumber: number;
   /** AC or NON_AC */
   section: string;
+  /** 1=AC room, 2=Non-AC/switchable room, 3=Common area */
+  room: number;
   isAC: boolean;
-  isUnderMaintenance: boolean;
+  /** True if seat was booked offline at the admin desk */
+  isOfflineBooked: boolean;
+  /** 1-month price for this seat */
   price: number;
   /**
      * True if this seat is booked for the queried month
      * @nullable
      */
   bookedForMonth?: boolean | null;
-  /**
-     * Booking ID if booked for the queried month
-     * @nullable
-     */
+  /** @nullable */
   bookingId?: number | null;
-  /**
-     * Name of the person who booked (admin view)
-     * @nullable
-     */
+  /** @nullable */
   bookedByName?: string | null;
 }
 
 export interface SeatUpdate {
-  isUnderMaintenance?: boolean;
+  isOfflineBooked?: boolean;
 }
 
 export interface Booking {
@@ -47,8 +45,12 @@ export interface Booking {
   customerPhone: string;
   /** @nullable */
   customerEmail?: string | null;
-  /** YYYY-MM format */
+  /** YYYY-MM start month */
   month: string;
+  /** YYYY-MM last month of booking */
+  endMonth: string;
+  /** 1, 2, 3, or 6 */
+  durationMonths: number;
   amount: number;
   /** pending | confirmed | cancelled */
   status: string;
@@ -64,8 +66,10 @@ export interface BookingInput {
   /** @minLength 10 */
   customerPhone: string;
   customerEmail?: string;
-  /** YYYY-MM format */
+  /** YYYY-MM start month */
   month: string;
+  /** 1, 2, 3, or 6 — defaults to 1 */
+  durationMonths?: number;
 }
 
 export interface BookingUpdate {
@@ -105,14 +109,28 @@ export interface PaymentConfirm {
 
 export interface Pricing {
   id: number;
-  acPrice: number;
-  nonAcPrice: number;
+  acPrice1m: number;
+  acPrice2m: number;
+  acPrice3m: number;
+  acPrice6m: number;
+  nonAcPrice1m: number;
+  nonAcPrice2m: number;
+  nonAcPrice3m: number;
+  nonAcPrice6m: number;
+  room2IsAc: boolean;
   updatedAt: string;
 }
 
 export interface PricingUpdate {
-  acPrice?: number;
-  nonAcPrice?: number;
+  acPrice1m?: number;
+  acPrice2m?: number;
+  acPrice3m?: number;
+  acPrice6m?: number;
+  nonAcPrice1m?: number;
+  nonAcPrice2m?: number;
+  nonAcPrice3m?: number;
+  nonAcPrice6m?: number;
+  room2IsAc?: boolean;
 }
 
 export interface AdminLoginInput {

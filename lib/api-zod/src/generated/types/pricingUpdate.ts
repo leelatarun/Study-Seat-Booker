@@ -7,6 +7,13 @@
  */
 
 export interface PricingUpdate {
-  acPrice?: number;
-  nonAcPrice?: number;
+  acPrice1m?: number;
+  acPrice2m?: number;
+  acPrice3m?: number;
+  acPrice6m?: number;
+  nonAcPrice1m?: number;
+  nonAcPrice2m?: number;
+  nonAcPrice3m?: number;
+  nonAcPrice6m?: number;
+  room2IsAc?: boolean;
 }

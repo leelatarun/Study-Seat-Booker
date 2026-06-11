@@ -8,7 +8,9 @@ export const bookingsTable = pgTable("bookings", {
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerEmail: text("customer_email"),
-  month: text("month").notNull(), // YYYY-MM
+  month: text("month").notNull(),       // YYYY-MM start month
+  endMonth: text("end_month").notNull(), // YYYY-MM last month of booking
+  durationMonths: integer("duration_months").notNull().default(1), // 1,2,3,6
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
   paymentSessionId: text("payment_session_id"),

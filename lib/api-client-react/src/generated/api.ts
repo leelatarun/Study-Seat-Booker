@@ -299,7 +299,7 @@ export const getUpdateSeatUrl = (id: number,) => {
 }
 
 /**
- * @summary Admin - toggle seat maintenance status
+ * @summary Admin - toggle seat offline booking status
  */
 export const updateSeat = async (id: number,
     seatUpdate: SeatUpdate, options?: RequestInit): Promise<Seat> => {
@@ -349,7 +349,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateSeatMutationError = ErrorType<void>
 
     /**
- * @summary Admin - toggle seat maintenance status
+ * @summary Admin - toggle seat offline booking status
  */
 export const useUpdateSeat = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSeat>>, TError,{id: number;data: BodyType<SeatUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -978,7 +978,7 @@ export const getUpdatePricingUrl = () => {
 }
 
 /**
- * @summary Admin - update pricing
+ * @summary Admin - update pricing and room settings
  */
 export const updatePricing = async (pricingUpdate: PricingUpdate, options?: RequestInit): Promise<Pricing> => {
 
@@ -1027,7 +1027,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdatePricingMutationError = ErrorType<void>
 
     /**
- * @summary Admin - update pricing
+ * @summary Admin - update pricing and room settings
  */
 export const useUpdatePricing = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePricing>>, TError,{data: BodyType<PricingUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
