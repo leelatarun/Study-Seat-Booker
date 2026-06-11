@@ -1,0 +1,29 @@
+Build a website for Library Seat Booking on the similar lines of a movie ticket booking platform (like BookMyShow), but for a monthly-basis private study cabin rental.
+
+1. HOMEPAGE OUTLOOK:
+- The homepage should start with a clean hero section featuring a carousel/gallery placeholder for real-time photos of the study room. The Name of the study hall “Lucky Reading Room” and the Colour theme is cream/white ( Resonating with the calm vibes of the studyroom) and provide the some home grown plants here and there to display how the study hall actually looks with in the website 
+- Include a section below the photos displaying a clean layout for Google Reviews (stars, reviewer name, text placeholders). This is the link for google reviews of the study Room : https://share.google/ICIDWV5UsFs9Dc5U1 and add in few of the reviews uploaded as photo. Show them as text in the page 
+- Below the reviews, display the interactive seat layout. The Floor plan is provided above 
+
+2. SEAT LAYOUT & PRICING (Based on the provided floor plan):
+- The layout must match the provided floor plan image structurally- All cabins must be individual, clickable buttons. The layout should be like BookMyShow Type seat booking for monthly basis
+- Pricing structure:
+  * AC Section = ₹2,000/month.
+  * Non-AC Sections = ₹1,500/month.
+
+3. BOOKING LOGIC:
+- Users select a seat from the visual grid layout.
+- Above the grid, there must be a dropdown menu to "Select Month" (e.g., July 2026, August 2026). 
+Bookings are strictly monthly. If a seat is booked for a specific month, its status updates in the database and shows as "Unavailable" (Grey) for that month, but remains "Available" (Green) for other months. 
+Then after the sleeting the seat direct them to the payment gate way to fulfil their order( for now create a demo payment process) 
+
+4. TRADITIONAL ADMIN DASHBOARD:
+- Create a secret, password-protected Admin page (e.g., /admin).
+- The admin should see a dashboard listing all seats, their current booking status for the selected month, and who booked them.
+- Provide simple form controls for the admin to:
+  * Manually toggle a seat as "Available" or "Unavailable" (for maintenance).
+  * Change the base pricing for the AC section or Non-AC section dynamically.
+
+5. TECH STACK:
+- Build the frontend with a sleek dark-mode theatre aesthetic using Tailwind CSS.
+- Connect this to a Supabase backend to manage users, seats, and monthly booking states.
