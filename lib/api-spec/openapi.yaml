@@ -3,13 +3,24 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Lucky Reading Room - Library Seat Booking API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: seats
+    description: Seat management
+  - name: bookings
+    description: Booking management
+  - name: payments
+    description: Payment processing
+  - name: pricing
+    description: Pricing configuration
+  - name: admin
+    description: Admin operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +35,281 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /seats:
+    get:
+      operationId: listSeats
+      tags: [seats]
+      summary: List all seats with availability for a month
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+            description: "Month in YYYY-MM format (e.g. 2026-07)"
+      responses:
+        "200":
+          description: List of seats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Seat"
+
+  /seats/{id}:
+    get:
+      operationId: getSeat
+      tags: [seats]
+      summary: Get a seat by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Seat details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seat"
+        "404":
+          description: Seat not found
+
+    patch:
+      operationId: updateSeat
+      tags: [seats]
+      summary: Admin - toggle seat maintenance status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeatUpdate"
+      responses:
+        "200":
+          description: Updated seat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Seat"
+        "401":
+          description: Unauthorized
+
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [bookings]
+      summary: List bookings (admin)
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+            description: "Month in YYYY-MM format"
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a new booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingInput"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          description: Invalid input or seat already booked
+        "409":
+          description: Seat already booked for this month
+
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get a booking by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Booking not found
+
+    patch:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Admin - update booking status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingUpdate"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/summary:
+    get:
+      operationId: getBookingSummary
+      tags: [bookings]
+      summary: Get booking statistics for a month
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            description: "Month in YYYY-MM format"
+      responses:
+        "200":
+          description: Booking summary statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingSummary"
+
+  /payments/initiate:
+    post:
+      operationId: initiatePayment
+      tags: [payments]
+      summary: Initiate a demo payment for a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInitiate"
+      responses:
+        "200":
+          description: Payment session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSession"
+        "404":
+          description: Booking not found
+
+  /payments/confirm:
+    post:
+      operationId: confirmPayment
+      tags: [payments]
+      summary: Confirm a demo payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentConfirm"
+      responses:
+        "200":
+          description: Payment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          description: Invalid payment session
+
+  /pricing:
+    get:
+      operationId: getPricing
+      tags: [pricing]
+      summary: Get current pricing
+      responses:
+        "200":
+          description: Current pricing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pricing"
+
+    patch:
+      operationId: updatePricing
+      tags: [pricing]
+      summary: Admin - update pricing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PricingUpdate"
+      responses:
+        "200":
+          description: Updated pricing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pricing"
+        "401":
+          description: Unauthorized
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResult"
+        "401":
+          description: Invalid credentials
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +320,184 @@ components:
       required:
         - status
 
+    Seat:
+      type: object
+      required: [id, seatNumber, section, isAC, isUnderMaintenance, price]
+      properties:
+        id:
+          type: integer
+        seatNumber:
+          type: integer
+        section:
+          type: string
+          description: "AC or NON_AC"
+        isAC:
+          type: boolean
+        isUnderMaintenance:
+          type: boolean
+        price:
+          type: number
+        bookedForMonth:
+          type: ["boolean", "null"]
+          description: "True if this seat is booked for the queried month"
+        bookingId:
+          type: ["integer", "null"]
+          description: "Booking ID if booked for the queried month"
+        bookedByName:
+          type: ["string", "null"]
+          description: "Name of the person who booked (admin view)"
+
+    SeatUpdate:
+      type: object
+      properties:
+        isUnderMaintenance:
+          type: boolean
+
+    Booking:
+      type: object
+      required: [id, seatId, seatNumber, section, customerName, customerPhone, month, amount, status, createdAt]
+      properties:
+        id:
+          type: integer
+        seatId:
+          type: integer
+        seatNumber:
+          type: integer
+        section:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        customerEmail:
+          type: ["string", "null"]
+        month:
+          type: string
+          description: "YYYY-MM format"
+        amount:
+          type: number
+        status:
+          type: string
+          description: "pending | confirmed | cancelled"
+        paymentSessionId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    BookingInput:
+      type: object
+      required: [seatId, customerName, customerPhone, month]
+      properties:
+        seatId:
+          type: integer
+        customerName:
+          type: string
+          minLength: 2
+        customerPhone:
+          type: string
+          minLength: 10
+        customerEmail:
+          type: string
+        month:
+          type: string
+          description: "YYYY-MM format"
+
+    BookingUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          description: "pending | confirmed | cancelled"
+
+    BookingSummary:
+      type: object
+      required: [month, totalSeats, bookedSeats, availableSeats, acBooked, nonAcBooked, revenue]
+      properties:
+        month:
+          type: string
+        totalSeats:
+          type: integer
+        bookedSeats:
+          type: integer
+        availableSeats:
+          type: integer
+        acBooked:
+          type: integer
+        nonAcBooked:
+          type: integer
+        revenue:
+          type: number
+
+    PaymentInitiate:
+      type: object
+      required: [bookingId]
+      properties:
+        bookingId:
+          type: integer
+
+    PaymentSession:
+      type: object
+      required: [sessionId, bookingId, amount, expiresAt]
+      properties:
+        sessionId:
+          type: string
+        bookingId:
+          type: integer
+        amount:
+          type: number
+        expiresAt:
+          type: string
+
+    PaymentConfirm:
+      type: object
+      required: [sessionId, bookingId]
+      properties:
+        sessionId:
+          type: string
+        bookingId:
+          type: integer
+        cardNumber:
+          type: string
+        cardName:
+          type: string
+        expiry:
+          type: string
+        cvv:
+          type: string
+
+    Pricing:
+      type: object
+      required: [id, acPrice, nonAcPrice, updatedAt]
+      properties:
+        id:
+          type: integer
+        acPrice:
+          type: number
+        nonAcPrice:
+          type: number
+        updatedAt:
+          type: string
+
+    PricingUpdate:
+      type: object
+      properties:
+        acPrice:
+          type: number
+        nonAcPrice:
+          type: number
+
+    AdminLoginInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    AdminLoginResult:
+      type: object
+      required: [success, token]
+      properties:
+        success:
+          type: boolean
+        token:
+          type: string

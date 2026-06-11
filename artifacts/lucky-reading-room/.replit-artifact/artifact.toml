@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Lucky Reading Room"
+version = "1.0.0"
+id = "artifacts/lucky-reading-room"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23540
+
+[services.development]
+run = "pnpm --filter @workspace/lucky-reading-room run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lucky-reading-room", "run", "build" ]
+publicDir = "artifacts/lucky-reading-room/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23540"
+BASE_PATH = "/"
