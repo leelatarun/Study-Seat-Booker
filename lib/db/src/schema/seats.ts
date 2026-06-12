@@ -9,6 +9,10 @@ export const seatsTable = pgTable("seats", {
   room: integer("room").notNull().default(1), // 1=AC, 2=Non-AC/AC-switchable, 3=Common
   isAC: boolean("is_ac").notNull().default(false),
   isOfflineBooked: boolean("is_offline_booked").notNull().default(false),
+  offlineBookingName: text("offline_booking_name"),
+  offlineBookingPhone: text("offline_booking_phone"),
+  offlineBookingFrom: text("offline_booking_from"),
+  offlineBookingUntil: text("offline_booking_until"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

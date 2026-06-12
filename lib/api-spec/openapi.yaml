@@ -339,6 +339,16 @@ components:
         isOfflineBooked:
           type: boolean
           description: "True if seat was booked offline at the admin desk"
+        offlineBookingName:
+          type: ["string", "null"]
+        offlineBookingPhone:
+          type: ["string", "null"]
+        offlineBookingFrom:
+          type: ["string", "null"]
+          description: "YYYY-MM start month for offline booking"
+        offlineBookingUntil:
+          type: ["string", "null"]
+          description: "YYYY-MM end month for offline booking"
         price:
           type: number
           description: "1-month price for this seat"
@@ -355,6 +365,18 @@ components:
       properties:
         isOfflineBooked:
           type: boolean
+        offlineBookingName:
+          type: string
+          nullable: true
+        offlineBookingPhone:
+          type: string
+          nullable: true
+        offlineBookingFrom:
+          type: string
+          nullable: true
+        offlineBookingUntil:
+          type: string
+          nullable: true
 
     Booking:
       type: object

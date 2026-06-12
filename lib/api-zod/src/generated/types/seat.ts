@@ -16,6 +16,20 @@ export interface Seat {
   isAC: boolean;
   /** True if seat was booked offline at the admin desk */
   isOfflineBooked: boolean;
+  /** @nullable */
+  offlineBookingName?: string | null;
+  /** @nullable */
+  offlineBookingPhone?: string | null;
+  /**
+     * YYYY-MM start month for offline booking
+     * @nullable
+     */
+  offlineBookingFrom?: string | null;
+  /**
+     * YYYY-MM end month for offline booking
+     * @nullable
+     */
+  offlineBookingUntil?: string | null;
   /** 1-month price for this seat */
   price: number;
   /**

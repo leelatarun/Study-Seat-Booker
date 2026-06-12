@@ -8,4 +8,8 @@
 
 export interface SeatUpdate {
   isOfflineBooked?: boolean;
+  offlineBookingName?: string | null;
+  offlineBookingPhone?: string | null;
+  offlineBookingFrom?: string | null;
+  offlineBookingUntil?: string | null;
 }

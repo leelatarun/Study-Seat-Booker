@@ -31,6 +31,10 @@ export const ListSeatsResponseItem = zod.object({
   "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
   "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "offlineBookingName": zod.string().nullish(),
+  "offlineBookingPhone": zod.string().nullish(),
+  "offlineBookingFrom": zod.string().nullish().describe('YYYY-MM start month for offline booking'),
+  "offlineBookingUntil": zod.string().nullish().describe('YYYY-MM end month for offline booking'),
   "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
   "bookingId": zod.number().nullish(),
@@ -53,6 +57,10 @@ export const GetSeatResponse = zod.object({
   "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
   "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "offlineBookingName": zod.string().nullish(),
+  "offlineBookingPhone": zod.string().nullish(),
+  "offlineBookingFrom": zod.string().nullish().describe('YYYY-MM start month for offline booking'),
+  "offlineBookingUntil": zod.string().nullish().describe('YYYY-MM end month for offline booking'),
   "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
   "bookingId": zod.number().nullish(),
@@ -68,7 +76,11 @@ export const UpdateSeatParams = zod.object({
 })
 
 export const UpdateSeatBody = zod.object({
-  "isOfflineBooked": zod.boolean().optional()
+  "isOfflineBooked": zod.boolean().optional(),
+  "offlineBookingName": zod.string().nullish(),
+  "offlineBookingPhone": zod.string().nullish(),
+  "offlineBookingFrom": zod.string().nullish(),
+  "offlineBookingUntil": zod.string().nullish()
 })
 
 export const UpdateSeatResponse = zod.object({
@@ -78,6 +90,10 @@ export const UpdateSeatResponse = zod.object({
   "room": zod.number().describe('1=AC room, 2=Non-AC\/switchable room, 3=Common area'),
   "isAC": zod.boolean(),
   "isOfflineBooked": zod.boolean().describe('True if seat was booked offline at the admin desk'),
+  "offlineBookingName": zod.string().nullish(),
+  "offlineBookingPhone": zod.string().nullish(),
+  "offlineBookingFrom": zod.string().nullish().describe('YYYY-MM start month for offline booking'),
+  "offlineBookingUntil": zod.string().nullish().describe('YYYY-MM end month for offline booking'),
   "price": zod.number().describe('1-month price for this seat'),
   "bookedForMonth": zod.boolean().nullish().describe('True if this seat is booked for the queried month'),
   "bookingId": zod.number().nullish(),
