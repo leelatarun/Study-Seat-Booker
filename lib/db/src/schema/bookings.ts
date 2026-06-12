@@ -11,8 +11,10 @@ export const bookingsTable = pgTable("bookings", {
   month: text("month").notNull(),       // YYYY-MM start month
   endMonth: text("end_month").notNull(), // YYYY-MM last month of booking
   durationMonths: integer("duration_months").notNull().default(1), // 1,2,3,6
+  startDay: integer("start_day"),       // Day of month (1-31) the booking starts
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
+  paymentDate: text("payment_date"),    // YYYY-MM-DD when payment was confirmed
   paymentSessionId: text("payment_session_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -17,4 +17,6 @@ export interface BookingInput {
   month: string;
   /** 1, 2, 3, or 6 — defaults to 1 */
   durationMonths?: number;
+  /** Day of month (1-31) when booking starts — defaults to 1 */
+  startDay?: number;
 }

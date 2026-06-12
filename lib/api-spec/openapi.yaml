@@ -410,6 +410,12 @@ components:
         status:
           type: string
           description: "pending | confirmed | cancelled"
+        startDay:
+          type: ["integer", "null"]
+          description: "Day of month (1-31) when booking starts"
+        paymentDate:
+          type: ["string", "null"]
+          description: "YYYY-MM-DD when payment was confirmed"
         paymentSessionId:
           type: ["string", "null"]
         createdAt:
@@ -436,6 +442,9 @@ components:
           type: integer
           description: "1, 2, 3, or 6 — defaults to 1"
           default: 1
+        startDay:
+          type: integer
+          description: "Day of month (1-31) when booking starts — defaults to 1"
 
     BookingUpdate:
       type: object

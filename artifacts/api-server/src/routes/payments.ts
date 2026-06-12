@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, bookingsTable, seatsTable } from "@workspace/db";
+import { db, bookingsTable, seatsTable, pricingTable } from "@workspace/db";
 import { InitiatePaymentBody, ConfirmPaymentBody } from "@workspace/api-zod";
 import crypto from "crypto";
 
@@ -8,18 +8,33 @@ const router: IRouter = Router();
 
 const paymentSessions = new Map<string, { bookingId: number; amount: number; expiresAt: Date }>();
 
-function formatBooking(booking: typeof bookingsTable.$inferSelect, seat?: typeof seatsTable.$inferSelect) {
+function getSectionForSeat(seat: typeof seatsTable.$inferSelect, room2IsAc: boolean): string {
+  if (seat.room === 1) return "AC";
+  if (seat.room === 2) return room2IsAc ? "AC" : "NON_AC";
+  return "NON_AC";
+}
+
+function formatBooking(
+  booking: typeof bookingsTable.$inferSelect,
+  seat?: typeof seatsTable.$inferSelect,
+  room2IsAc = false
+) {
+  const section = seat ? getSectionForSeat(seat, room2IsAc) : "UNKNOWN";
   return {
     id: booking.id,
     seatId: booking.seatId,
     seatNumber: seat?.seatNumber ?? booking.seatId,
-    section: seat?.section ?? "UNKNOWN",
+    section,
     customerName: booking.customerName,
     customerPhone: booking.customerPhone,
     customerEmail: booking.customerEmail ?? null,
     month: booking.month,
+    endMonth: booking.endMonth,
+    durationMonths: booking.durationMonths,
+    startDay: booking.startDay ?? null,
     amount: Number(booking.amount),
     status: booking.status,
+    paymentDate: booking.paymentDate ?? null,
     paymentSessionId: booking.paymentSessionId ?? null,
     createdAt: booking.createdAt.toISOString(),
   };
@@ -86,9 +101,11 @@ router.post("/payments/confirm", async (req, res): Promise<void> => {
 
   paymentSessions.delete(body.data.sessionId);
 
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
   const [updated] = await db
     .update(bookingsTable)
-    .set({ status: "confirmed" })
+    .set({ status: "confirmed", paymentDate: today })
     .where(eq(bookingsTable.id, body.data.bookingId))
     .returning();
 
@@ -98,7 +115,9 @@ router.post("/payments/confirm", async (req, res): Promise<void> => {
   }
 
   const seat = await db.select().from(seatsTable).where(eq(seatsTable.id, updated.seatId)).limit(1);
-  res.json(formatBooking(updated, seat[0]));
+  const pricingRow = await db.select().from(pricingTable).limit(1);
+  const room2IsAc = pricingRow[0]?.room2IsAc ?? false;
+  res.json(formatBooking(updated, seat[0], room2IsAc));
 });
 
 export default router;

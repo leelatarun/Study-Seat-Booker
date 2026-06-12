@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 const getMonths = () => {
-  const baseDate = new Date(2026, 6, 1);
-  return Array.from({ length: 6 }).map((_, i) => {
-    const date = addMonths(baseDate, i);
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+  return Array.from({ length: 12 }).map((_, i) => {
+    const date = addMonths(base, i);
     return { value: format(date, "yyyy-MM"), label: format(date, "MMMM yyyy") };
   });
 };
@@ -28,7 +29,6 @@ const AC_ROWS_SPLIT = [
 ];
 
 // Room 2 (Non-AC by default / switchable, seats 49–93)
-// Row 8 now matches Row 7 direction: left=smaller numbers, right=larger numbers
 const NAC_ROWS = [
   { left: [49, 50, 51, 52, 53],       right: [54, 55, 56, 57, 58]       },
   { left: [70, 69, 68, 67, 66, 65],   right: [64, 63, 62, 61, 60, 59]   },
@@ -60,20 +60,19 @@ export function SeatSelector({
   const getStatus = (n: number) => {
     const s = getSeatData(n);
     if (!s) return "unavailable";
-    if (s.isOfflineBooked) return "offline";
-    if (s.bookedForMonth) return "booked";
+    // Both offline and online bookings show as occupied/grey
+    if (s.isOfflineBooked || s.bookedForMonth) return "booked";
     return "available";
   };
 
   const getTooltip = (n: number): string => {
     const s = getSeatData(n);
     if (!s) return `Seat ${n}`;
-    const status = getStatus(n);
-    if (status === "offline") return `Seat ${n} — Offline booked`;
-    if (status === "booked" && s.bookedByName) {
+    if (s.isOfflineBooked) return `Seat ${n} — Occupied`;
+    if (s.bookedForMonth && s.bookedByName) {
       return `Seat ${n} — ${s.bookedByName} (${monthLabel(month)})`;
     }
-    if (status === "booked") return `Seat ${n} — Occupied`;
+    if (s.bookedForMonth) return `Seat ${n} — Occupied`;
     return `Seat ${n} — ₹${s.price?.toLocaleString("en-IN")}/mo`;
   };
 
@@ -93,8 +92,6 @@ export function SeatSelector({
 
     if (status === "unavailable") {
       cls += "bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed opacity-40";
-    } else if (status === "offline") {
-      cls += "bg-orange-100 border-orange-200 text-orange-400 cursor-not-allowed";
     } else if (status === "booked") {
       cls += "bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed";
     } else if (isSelected) {
@@ -122,8 +119,13 @@ export function SeatSelector({
     </div>
   );
 
+  // Get real prices from seat data
+  const room1Price = seats.find((s) => s.room === 1)?.price;
+  const room2Price = seats.find((s) => s.room === 2)?.price;
   const room2Label = room2IsAc ? "ROOM 2 — AC" : "ROOM 2 — NON-AC";
-  const room2PriceNote = room2IsAc ? "AC pricing" : "Non-AC pricing";
+  const room2PriceDisplay = room2Price != null
+    ? `₹${room2Price.toLocaleString("en-IN")}/mo`
+    : (room2IsAc ? "AC pricing" : "Non-AC pricing");
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-6 py-6">
@@ -149,8 +151,7 @@ export function SeatSelector({
         {[
           { color: "bg-white border-green-400", label: "Vacant" },
           { color: "bg-primary border-primary", label: "Selected" },
-          { color: "bg-gray-200 border-gray-300", label: "Occupied (Online)" },
-          { color: "bg-orange-100 border-orange-200", label: "Offline Booked" },
+          { color: "bg-gray-200 border-gray-300", label: "Occupied" },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <div className={`w-4 h-4 ${color} border-2 rounded-sm shadow-sm`}></div>
@@ -166,7 +167,9 @@ export function SeatSelector({
           <div className="w-full border border-gray-200 rounded-xl p-5 bg-white shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-semibold tracking-widest text-gray-400 uppercase">Room 1 — AC</h3>
-              <span className="text-xs text-green-600 font-medium">₹2,000/mo</span>
+              <span className="text-xs text-green-600 font-medium">
+                {room1Price != null ? `₹${room1Price.toLocaleString("en-IN")}/mo` : "₹2,000/mo"}
+              </span>
             </div>
 
             {/* Row 1 – full-width 12 seats */}
@@ -190,7 +193,7 @@ export function SeatSelector({
           <div className="w-full border border-gray-200 rounded-xl p-5 bg-white shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-semibold tracking-widest text-gray-400 uppercase">{room2Label}</h3>
-              <span className="text-xs text-gray-400 font-medium">{room2PriceNote}</span>
+              <span className="text-xs text-green-600 font-medium">{room2PriceDisplay}</span>
             </div>
 
             <div className="flex flex-col gap-3">

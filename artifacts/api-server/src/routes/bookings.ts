@@ -61,8 +61,10 @@ function formatBooking(
     month: booking.month,
     endMonth: booking.endMonth,
     durationMonths: booking.durationMonths,
+    startDay: booking.startDay ?? null,
     amount: Number(booking.amount),
     status: booking.status,
+    paymentDate: booking.paymentDate ?? null,
     paymentSessionId: booking.paymentSessionId ?? null,
     createdAt: booking.createdAt.toISOString(),
   };
@@ -81,6 +83,7 @@ router.get("/bookings/summary", async (req, res): Promise<void> => {
   const pricing = pricingRow[0];
   const room2IsAc = pricing?.room2IsAc ?? false;
 
+  // Online confirmed bookings for this month
   const bookingsForMonth = await db
     .select()
     .from(bookingsTable)
@@ -93,20 +96,42 @@ router.get("/bookings/summary", async (req, res): Promise<void> => {
     );
 
   const bookedSeatIds = new Set(bookingsForMonth.map((b) => b.seatId));
+
+  // Offline-booked seats active for this month
+  const offlineSeats = allSeats.filter((s) => {
+    if (!s.isOfflineBooked) return false;
+    // If no dates set, count it as active
+    if (!s.offlineBookingFrom || !s.offlineBookingUntil) return true;
+    return s.offlineBookingFrom <= month && s.offlineBookingUntil >= month;
+  });
+
+  const totalBooked = bookedSeatIds.size + offlineSeats.filter((s) => !bookedSeatIds.has(s.id)).length;
+
   const acSeats = allSeats.filter((s) => getSectionForSeat(s, room2IsAc).isAC);
   const nonAcSeats = allSeats.filter((s) => !getSectionForSeat(s, room2IsAc).isAC);
   const acBooked = acSeats.filter((s) => bookedSeatIds.has(s.id)).length;
   const nonAcBooked = nonAcSeats.filter((s) => bookedSeatIds.has(s.id)).length;
-  const revenue = bookingsForMonth.reduce((sum, b) => sum + Number(b.amount) / b.durationMonths, 0);
+
+  // Online revenue (per-month share of multi-month bookings)
+  const onlineRevenue = bookingsForMonth.reduce((sum, b) => sum + Number(b.amount) / b.durationMonths, 0);
+
+  // Offline revenue (1 month of each offline seat's price)
+  const offlineRevenue = offlineSeats
+    .filter((s) => !bookedSeatIds.has(s.id))
+    .reduce((sum, s) => {
+      const isAC = getSectionForSeat(s, room2IsAc).isAC;
+      const price = pricing ? (isAC ? pricing.acPrice1m : pricing.nonAcPrice1m) : (isAC ? 2000 : 1500);
+      return sum + price;
+    }, 0);
 
   res.json({
     month,
     totalSeats: allSeats.length,
-    bookedSeats: bookingsForMonth.length,
-    availableSeats: allSeats.length - bookingsForMonth.length,
+    bookedSeats: totalBooked,
+    availableSeats: allSeats.length - totalBooked,
     acBooked,
     nonAcBooked,
-    revenue: Math.round(revenue),
+    revenue: Math.round(onlineRevenue + offlineRevenue),
   });
 });
 
@@ -158,6 +183,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const durationMonths = body.data.durationMonths ?? 1;
   const startMonth = body.data.month;
   const endMonth = calcEndMonth(startMonth, durationMonths);
+  const startDay = body.data.startDay ?? 1;
 
   // Check for any overlapping confirmed booking
   const existing = await db
@@ -197,6 +223,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
       month: startMonth,
       endMonth,
       durationMonths,
+      startDay,
       amount: String(price),
       status: "pending",
     })

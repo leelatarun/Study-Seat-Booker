@@ -72,6 +72,16 @@ export interface Booking {
   amount: number;
   /** pending | confirmed | cancelled */
   status: string;
+  /**
+     * Day of month (1-31) when booking starts
+     * @nullable
+     */
+  startDay?: number | null;
+  /**
+     * YYYY-MM-DD when payment was confirmed
+     * @nullable
+     */
+  paymentDate?: string | null;
   /** @nullable */
   paymentSessionId?: string | null;
   createdAt: string;
@@ -88,6 +98,8 @@ export interface BookingInput {
   month: string;
   /** 1, 2, 3, or 6 — defaults to 1 */
   durationMonths?: number;
+  /** Day of month (1-31) when booking starts — defaults to 1 */
+  startDay?: number;
 }
 
 export interface BookingUpdate {

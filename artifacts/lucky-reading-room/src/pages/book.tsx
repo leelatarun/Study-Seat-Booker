@@ -15,12 +15,15 @@ const DURATION_OPTIONS = [
 ];
 
 const getMonths = () => {
-  const baseDate = new Date(2026, 6, 1);
-  return Array.from({ length: 6 }).map((_, i) => {
-    const date = addMonths(baseDate, i);
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+  return Array.from({ length: 12 }).map((_, i) => {
+    const date = addMonths(base, i);
     return { value: format(date, "yyyy-MM"), label: format(date, "MMMM yyyy") };
   });
 };
+
+const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 function addMonthsToYYYYMM(month: string, count: number): string {
   const [y, m] = month.split("-").map(Number);
@@ -33,6 +36,21 @@ function addMonthsToYYYYMM(month: string, count: number): string {
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-");
   return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+}
+
+function formatDateFromMonthAndDay(ym: string, day: number): string {
+  const [y, m] = ym.split("-");
+  return new Date(parseInt(y), parseInt(m) - 1, day).toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+function addMonthsToDate(ym: string, day: number, count: number): string {
+  const endYm = addMonthsToYYYYMM(ym, count + 1);
+  const [y, m] = endYm.split("-");
+  return new Date(parseInt(y), parseInt(m) - 1, day).toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", year: "numeric",
+  });
 }
 
 export default function Book() {
@@ -53,12 +71,15 @@ export default function Book() {
   const createBooking = useCreateBooking();
   const months = getMonths();
 
+  const today = new Date().getDate();
+
   const [form, setForm] = useState({
     name: "",
     phone: "",
     email: "",
     month: defaultMonth,
     duration: 1,
+    startDay: today,
   });
   const [error, setError] = useState("");
 
@@ -80,6 +101,8 @@ export default function Book() {
   const isAc = seat?.isAC ?? false;
   const selectedPrice = getPrice(form.duration, isAc);
   const endMonth = addMonthsToYYYYMM(form.month, form.duration);
+  const startDateStr = formatDateFromMonthAndDay(form.month, form.startDay);
+  const validUntilStr = addMonthsToDate(form.month, form.startDay, form.duration);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +118,7 @@ export default function Book() {
           customerEmail: form.email || undefined,
           month: form.month,
           durationMonths: form.duration,
+          startDay: form.startDay,
         },
       },
       {
@@ -185,26 +209,46 @@ export default function Book() {
                 );
               })}
             </div>
-            {form.duration > 1 && (
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                {monthLabel(form.month)} → {monthLabel(endMonth)}
-              </p>
-            )}
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="month">Start Month</Label>
-              <Select value={form.month} onValueChange={(v) => setForm({ ...form, month: v })}>
-                <SelectTrigger className="bg-gray-50 border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Month + Start Day */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Start Month</Label>
+                <Select value={form.month} onValueChange={(v) => setForm({ ...form, month: v })}>
+                  <SelectTrigger className="bg-gray-50 border-gray-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Start Day</Label>
+                <Select
+                  value={String(form.startDay)}
+                  onValueChange={(v) => setForm({ ...form, startDay: parseInt(v) })}
+                >
+                  <SelectTrigger className="bg-gray-50 border-gray-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAY_OPTIONS.map((d) => (
+                      <SelectItem key={d} value={String(d)}>{d}{d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Validity period */}
+            <div className="bg-green-50 border border-green-100 rounded-lg px-4 py-3 text-xs text-green-700">
+              <span className="font-medium">Valid:</span>{" "}
+              {startDateStr} → {validUntilStr}
             </div>
 
             <div className="space-y-1.5">

@@ -121,6 +121,8 @@ export const ListBookingsResponseItem = zod.object({
   "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish().describe('Day of month (1-31) when booking starts'),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
   "paymentSessionId": zod.string().nullish(),
   "createdAt": zod.string()
 })
@@ -142,7 +144,8 @@ export const CreateBookingBody = zod.object({
   "customerPhone": zod.string().min(createBookingBodyCustomerPhoneMin),
   "customerEmail": zod.string().optional(),
   "month": zod.string().describe('YYYY-MM start month'),
-  "durationMonths": zod.number().default(createBookingBodyDurationMonthsDefault).describe('1, 2, 3, or 6 — defaults to 1')
+  "durationMonths": zod.number().default(createBookingBodyDurationMonthsDefault).describe('1, 2, 3, or 6 — defaults to 1'),
+  "startDay": zod.number().optional().describe('Day of month (1-31) when booking starts — defaults to 1')
 })
 
 
@@ -166,6 +169,8 @@ export const GetBookingResponse = zod.object({
   "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish().describe('Day of month (1-31) when booking starts'),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
   "paymentSessionId": zod.string().nullish(),
   "createdAt": zod.string()
 })
@@ -195,6 +200,8 @@ export const UpdateBookingResponse = zod.object({
   "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish().describe('Day of month (1-31) when booking starts'),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
   "paymentSessionId": zod.string().nullish(),
   "createdAt": zod.string()
 })
@@ -258,6 +265,8 @@ export const ConfirmPaymentResponse = zod.object({
   "durationMonths": zod.number().describe('1, 2, 3, or 6'),
   "amount": zod.number(),
   "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish().describe('Day of month (1-31) when booking starts'),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
   "paymentSessionId": zod.string().nullish(),
   "createdAt": zod.string()
 })

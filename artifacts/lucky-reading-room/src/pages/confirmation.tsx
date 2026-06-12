@@ -8,6 +8,30 @@ function monthLabel(ym: string) {
   return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
 }
 
+function formatDateFromMonthAndDay(ym: string, day: number): string {
+  const [y, m] = ym.split("-");
+  return new Date(parseInt(y), parseInt(m) - 1, day).toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+function addMonthsToYYYYMM(month: string, count: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const totalMonths = y * 12 + m - 1 + count - 1;
+  const endYear = Math.floor(totalMonths / 12);
+  const endMon = (totalMonths % 12) + 1;
+  return `${endYear}-${String(endMon).padStart(2, "0")}`;
+}
+
+function validUntilDate(endMonth: string, day: number): string {
+  // Valid until the same day of the month AFTER endMonth
+  const [y, m] = endMonth.split("-").map(Number);
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  const nextYm = `${nextY}-${String(nextM).padStart(2, "0")}`;
+  return formatDateFromMonthAndDay(nextYm, day);
+}
+
 export default function Confirmation() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const [, navigate] = useLocation();
@@ -37,7 +61,21 @@ export default function Confirmation() {
   }
 
   const isMultiMonth = booking.durationMonths > 1;
+  const hasStartDay = booking.startDay != null && booking.startDay > 0;
+  const startDay = booking.startDay ?? 1;
   const receiptRef = "print-area";
+
+  const validFromStr = hasStartDay
+    ? formatDateFromMonthAndDay(booking.month, startDay)
+    : monthLabel(booking.month);
+
+  const validUntilStr = hasStartDay
+    ? validUntilDate(booking.endMonth, startDay)
+    : monthLabel(booking.endMonth);
+
+  const paymentDateStr = booking.paymentDate
+    ? new Date(booking.paymentDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+    : new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   return (
     <>
@@ -69,19 +107,22 @@ export default function Confirmation() {
               <div className="bg-gray-50 rounded-xl p-5 space-y-3 border border-gray-100">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Booking Receipt</p>
-                  <p className="text-xs text-gray-300">{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  <p className="text-xs text-gray-300">{paymentDateStr}</p>
                 </div>
                 {[
                   { label: "Booking ID", value: `#${booking.id.toString().padStart(6, "0")}` },
                   { label: "Cabin", value: `Seat ${booking.seatNumber}` },
                   { label: "Section", value: booking.section === "AC" ? "AC (Room 1)" : "Non-AC" },
                   {
-                    label: isMultiMonth ? "Period" : "Month",
-                    value: isMultiMonth
-                      ? `${monthLabel(booking.month)} → ${monthLabel(booking.endMonth)}`
-                      : monthLabel(booking.month),
+                    label: "Valid From",
+                    value: validFromStr,
+                  },
+                  {
+                    label: "Valid Until",
+                    value: validUntilStr,
                   },
                   ...(isMultiMonth ? [{ label: "Duration", value: `${booking.durationMonths} months` }] : []),
+                  ...(booking.paymentDate ? [{ label: "Payment Date", value: paymentDateStr }] : []),
                 ].map(({ label, value }) => (
                   <div key={label} className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">{label}</span>
@@ -105,7 +146,7 @@ export default function Confirmation() {
               </div>
 
               <div className="text-center text-xs text-gray-400 bg-gray-50 rounded-lg px-4 py-3 border border-gray-100">
-                Show this receipt when you arrive. Your cabin will be available again after the booked period ends.
+                Show this receipt when you arrive. Your cabin is reserved until {validUntilStr}.
               </div>
 
               <div className="flex gap-3">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, subMonths, parseISO } from "date-fns";
 import {
   useListBookings,
   useListSeats,
@@ -22,32 +22,65 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, Users, LogOut, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 
+// Always generate from current real-time month
 const getMonths = () => {
-  const base = new Date(2026, 6, 1);
-  return Array.from({ length: 12 }).map((_, i) => {
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+  return Array.from({ length: 24 }).map((_, i) => {
     const d = addMonths(base, i);
     return { value: format(d, "yyyy-MM"), label: format(d, "MMMM yyyy") };
   });
 };
+
+const currentMonth = () => format(new Date(), "yyyy-MM");
 
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-");
   return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "short", year: "numeric" });
 }
 
-// ──── Offline booking form (inline per seat) ────────────────────────────────
+function prevMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = subMonths(new Date(y, m - 1, 1), 1);
+  return format(d, "yyyy-MM");
+}
+
+function nextMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = addMonths(new Date(y, m - 1, 1), 1);
+  return format(d, "yyyy-MM");
+}
+
+function countMonthsInRange(from: string, until: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [uy, um] = until.split("-").map(Number);
+  return Math.max(1, (uy - fy) * 12 + (um - fm) + 1);
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    return parseISO(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+// ──── Offline booking form ────────────────────────────────────────────────────
 function OfflineForm({
   seat,
   months,
   onSave,
   onCancel,
+  pricing,
 }: {
   seat: Seat;
   months: { value: string; label: string }[];
   onSave: (data: { name: string; phone: string; from: string; until: string }) => void;
   onCancel: () => void;
+  pricing: any;
 }) {
   const [form, setForm] = useState({
     name: seat.offlineBookingName ?? "",
@@ -55,6 +88,12 @@ function OfflineForm({
     from: seat.offlineBookingFrom ?? months[0].value,
     until: seat.offlineBookingUntil ?? months[0].value,
   });
+
+  const numMonths = countMonthsInRange(form.from, form.until);
+  const monthlyPrice = seat.isAC
+    ? (pricing?.acPrice1m ?? 2000)
+    : (pricing?.nonAcPrice1m ?? 1500);
+  const totalPrice = numMonths * monthlyPrice;
 
   return (
     <div className="mt-2 p-3 rounded-lg bg-orange-50 border border-orange-100 space-y-2">
@@ -101,6 +140,10 @@ function OfflineForm({
           </Select>
         </div>
       </div>
+      <div className="bg-white rounded-lg px-3 py-2 border border-orange-100 flex items-center justify-between">
+        <span className="text-xs text-gray-500">{numMonths} month{numMonths !== 1 ? "s" : ""} × ₹{monthlyPrice.toLocaleString("en-IN")}/mo</span>
+        <span className="text-sm font-bold text-primary">₹{totalPrice.toLocaleString("en-IN")}</span>
+      </div>
       <div className="flex gap-2">
         <Button size="sm" className="h-7 text-xs" onClick={() => onSave(form)}>Save</Button>
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>Cancel</Button>
@@ -109,11 +152,12 @@ function OfflineForm({
   );
 }
 
-// ──── Dashboard view ─────────────────────────────────────────────────────────
+// ──── Dashboard view ──────────────────────────────────────────────────────────
 function DashboardView() {
   const queryClient = useQueryClient();
   const months = getMonths();
-  const [month, setMonth] = useState(months[0].value);
+  const [month, setMonth] = useState(currentMonth());
+  const [bookingTab, setBookingTab] = useState<"confirmed" | "pending">("confirmed");
   const [pricingOpen, setPricingOpen] = useState(false);
   const [expandedOfflineId, setExpandedOfflineId] = useState<number | null>(null);
   const [pricingEdit, setPricingEdit] = useState({
@@ -125,7 +169,7 @@ function DashboardView() {
     { month },
     { query: { queryKey: getGetBookingSummaryQueryKey({ month }) } }
   );
-  const { data: bookings = [], isLoading: bookingsLoading } = useListBookings(
+  const { data: allBookings = [], isLoading: bookingsLoading } = useListBookings(
     { month },
     { query: { queryKey: getListBookingsQueryKey({ month }) } }
   );
@@ -146,6 +190,17 @@ function DashboardView() {
     queryClient.invalidateQueries({ queryKey: getGetBookingSummaryQueryKey({ month }) });
   };
 
+  // Split bookings — filter old pending (>1 month old) out
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+  const confirmedBookings = allBookings.filter((b) => b.status === "confirmed");
+  const pendingBookings = allBookings.filter(
+    (b) => b.status === "pending" && new Date(b.createdAt) > oneMonthAgo
+  );
+
+  const displayedBookings = bookingTab === "confirmed" ? confirmedBookings : pendingBookings;
+
   const handleSaveOffline = (seatId: number, data: { name: string; phone: string; from: string; until: string }) => {
     updateSeat.mutate(
       {
@@ -162,6 +217,7 @@ function DashboardView() {
         onSuccess: () => {
           setExpandedOfflineId(null);
           invalidateSeats();
+          invalidateBookings();
         },
       }
     );
@@ -169,13 +225,16 @@ function DashboardView() {
 
   const handleToggleOffline = (seat: Seat) => {
     if (!seat.isOfflineBooked) {
-      // Turning ON — show the form
       setExpandedOfflineId(seat.id);
     } else {
-      // Turning OFF — clear it immediately
       updateSeat.mutate(
         { id: seat.id, data: { isOfflineBooked: false } },
-        { onSuccess: invalidateSeats }
+        {
+          onSuccess: () => {
+            invalidateSeats();
+            invalidateBookings();
+          },
+        }
       );
     }
   };
@@ -219,16 +278,33 @@ function DashboardView() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      {/* Month + Room2 controls */}
+      {/* Month nav + controls */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="w-48 bg-white border-gray-200">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {/* Month navigation */}
+        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+          <button
+            onClick={() => setMonth(prevMonth(month))}
+            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-semibold text-gray-700 min-w-[120px] text-center">
+            {monthLabel(month)}
+          </span>
+          <button
+            onClick={() => setMonth(nextMonth(month))}
+            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
+          >
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
+        </div>
+
+        <button
+          onClick={() => setMonth(currentMonth())}
+          className="text-xs text-primary hover:underline"
+        >
+          Today
+        </button>
 
         {pricing && (
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
@@ -318,20 +394,53 @@ function DashboardView() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-5">
-        {/* Bookings list with payment details */}
+        {/* Bookings with tabs */}
         <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-700 text-sm">
-              {months.find((m) => m.value === month)?.label} — Bookings ({bookings.filter(b => b.status !== "cancelled").length})
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-700 text-sm">
+                {monthLabel(month)} — Bookings
+              </h2>
+            </div>
+            {/* Tabs */}
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              {(["confirmed", "pending"] as const).map((tab) => {
+                const count = tab === "confirmed" ? confirmedBookings.length : pendingBookings.length;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setBookingTab(tab)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      bookingTab === tab
+                        ? "bg-white text-gray-800 shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {tab === "confirmed" ? "Confirmed" : "Pending"}
+                    <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
+                      tab === "confirmed"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
           {bookingsLoading ? (
             <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
-          ) : bookings.filter(b => b.status !== "cancelled").length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">No bookings for this month.</div>
+          ) : displayedBookings.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">
+              {bookingTab === "confirmed"
+                ? "No confirmed bookings for this month."
+                : "No pending bookings. Old pending bookings are automatically cleared."}
+            </div>
           ) : (
             <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto">
-              {bookings.filter(b => b.status !== "cancelled").map((b) => (
+              {displayedBookings.map((b) => (
                 <div key={b.id} className="px-5 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -342,16 +451,20 @@ function DashboardView() {
                           variant={b.status === "confirmed" ? "default" : "secondary"}
                           className="text-xs px-1.5 py-0"
                         >
-                          {b.status === "confirmed" ? "Paid ✓" : b.status}
+                          {b.status === "confirmed" ? "Paid ✓" : "Pending"}
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-600 font-medium">{b.customerName}</p>
                       <p className="text-xs text-gray-400">{b.customerPhone}{b.customerEmail ? ` · ${b.customerEmail}` : ""}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {b.durationMonths > 1
-                          ? `${b.durationMonths} months: ${monthLabel(b.month)} → ${monthLabel(b.endMonth)}`
+                          ? `${b.durationMonths} mo: ${monthLabel(b.month)} → ${monthLabel(b.endMonth)}`
                           : monthLabel(b.month)}
+                        {b.startDay && b.startDay > 1 ? ` (from ${b.startDay}th)` : ""}
                       </p>
+                      {b.paymentDate && (
+                        <p className="text-xs text-green-600 mt-0.5">Paid: {formatDate(b.paymentDate)}</p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-base font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
@@ -360,7 +473,7 @@ function DashboardView() {
                           className="text-xs text-red-400 hover:text-red-600 mt-1 transition-colors"
                           onClick={() => handleCancelBooking(b.id)}
                         >
-                          Release seat
+                          Release
                         </button>
                       )}
                     </div>
@@ -375,16 +488,25 @@ function DashboardView() {
         <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-700 text-sm">Offline Seat Bookings</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Toggle seats booked directly at the desk</p>
+            <p className="text-xs text-gray-400 mt-0.5">Toggle seats booked directly at the desk (counted in stats above)</p>
           </div>
-          <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto">
+          <div className="divide-y divide-gray-50 max-h-[480px] overflow-y-auto">
             {seats.map((seat) => {
-              const isOnlineBooked = (seat.bookedForMonth === true) && !seat.isOfflineBooked;
+              const isOnlineBooked = seat.bookedForMonth === true && !seat.isOfflineBooked;
               const showForm = expandedOfflineId === seat.id;
+
+              // Compute offline price for display
+              let offlineAmtDisplay = "";
+              if (seat.isOfflineBooked && seat.offlineBookingFrom && seat.offlineBookingUntil && pricing) {
+                const n = countMonthsInRange(seat.offlineBookingFrom, seat.offlineBookingUntil);
+                const monthlyPrice = seat.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m;
+                offlineAmtDisplay = `₹${(n * monthlyPrice).toLocaleString("en-IN")} (${n} mo)`;
+              }
+
               return (
                 <div key={seat.id} className="px-5 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-gray-800">Seat {seat.seatNumber}</span>
                         <span className="text-xs text-gray-400">{seat.section === "AC" ? "AC" : "Non-AC"}</span>
@@ -399,6 +521,7 @@ function DashboardView() {
                           {seat.offlineBookingFrom && seat.offlineBookingUntil
                             ? ` · ${monthLabel(seat.offlineBookingFrom)} → ${monthLabel(seat.offlineBookingUntil)}`
                             : ""}
+                          {offlineAmtDisplay ? ` · ${offlineAmtDisplay}` : ""}
                         </p>
                       )}
                     </div>
@@ -414,6 +537,7 @@ function DashboardView() {
                       months={months}
                       onSave={(data) => handleSaveOffline(seat.id, data)}
                       onCancel={() => setExpandedOfflineId(null)}
+                      pricing={pricing}
                     />
                   )}
                 </div>
@@ -426,12 +550,10 @@ function DashboardView() {
   );
 }
 
-// ──── Management List view ───────────────────────────────────────────────────
+// ──── Management List view ────────────────────────────────────────────────────
 function ManagementListView() {
   const queryClient = useQueryClient();
-  const months = getMonths();
 
-  // Fetch ALL bookings (no month filter) for management view
   const { data: allSeats = [] } = useListSeats(
     {},
     { query: { queryKey: getListSeatsQueryKey({}) } }
@@ -440,6 +562,7 @@ function ManagementListView() {
     {},
     { query: { queryKey: getListBookingsQueryKey({}) } }
   );
+  const { data: pricing } = useGetPricing({ query: { queryKey: getGetPricingQueryKey() } });
 
   const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
   const updateSeat = useUpdateSeat({ request: adminReq });
@@ -447,7 +570,6 @@ function ManagementListView() {
 
   const confirmedBookings = allBookings.filter((b) => b.status === "confirmed");
 
-  // Map seatId → bookings
   const bookingsBySeat = new Map<number, Booking[]>();
   confirmedBookings.forEach((b) => {
     if (!bookingsBySeat.has(b.seatId)) bookingsBySeat.set(b.seatId, []);
@@ -466,7 +588,12 @@ function ManagementListView() {
     if (!confirm("Clear offline booking for this seat?")) return;
     updateSeat.mutate(
       { id: seatId, data: { isOfflineBooked: false } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListSeatsQueryKey({}) }) }
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListSeatsQueryKey({}) });
+          queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey({}) });
+        },
+      }
     );
   };
 
@@ -479,9 +606,9 @@ function ManagementListView() {
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <p className="text-sm text-gray-400 mb-6">
-        All {allSeats.length} seats — showing current & upcoming bookings.
+        All {allSeats.length} seats — showing all confirmed bookings.
         <span className="ml-2 text-primary font-medium">
-          {confirmedBookings.length} active booking{confirmedBookings.length !== 1 ? "s" : ""}.
+          {confirmedBookings.length} confirmed booking{confirmedBookings.length !== 1 ? "s" : ""}.
         </span>
       </p>
 
@@ -493,88 +620,99 @@ function ManagementListView() {
               const seatBookings = bookingsBySeat.get(seat.id) ?? [];
               const isEmpty = seatBookings.length === 0 && !seat.isOfflineBooked;
 
+              let offlineAmtDisplay = "";
+              if (seat.isOfflineBooked && seat.offlineBookingFrom && seat.offlineBookingUntil && pricing) {
+                const n = countMonthsInRange(seat.offlineBookingFrom, seat.offlineBookingUntil);
+                const monthlyPrice = seat.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m;
+                offlineAmtDisplay = `₹${(n * monthlyPrice).toLocaleString("en-IN")}`;
+              }
+
               return (
                 <div key={seat.id} className="px-5 py-3">
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Seat info */}
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className={`mt-0.5 w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                        isEmpty
-                          ? "bg-green-50 text-green-600 border border-green-200"
-                          : seat.isOfflineBooked
-                          ? "bg-orange-50 text-orange-600 border border-orange-200"
-                          : "bg-blue-50 text-blue-600 border border-blue-200"
-                      }`}>
-                        {seat.seatNumber}
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                      isEmpty
+                        ? "bg-green-50 text-green-600 border border-green-200"
+                        : seat.isOfflineBooked
+                        ? "bg-orange-50 text-orange-600 border border-orange-200"
+                        : "bg-blue-50 text-blue-600 border border-blue-200"
+                    }`}>
+                      {seat.seatNumber}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-800">Seat {seat.seatNumber}</span>
+                        <span className="text-xs text-gray-400">{seat.section === "AC" ? "AC" : "Non-AC"}</span>
+                        {isEmpty && <span className="text-xs text-green-600 font-medium">Available</span>}
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-800">Seat {seat.seatNumber}</span>
-                          <span className="text-xs text-gray-400">{seat.section === "AC" ? "AC" : "Non-AC"}</span>
-                          {isEmpty && <span className="text-xs text-green-600 font-medium">Available</span>}
-                        </div>
-
-                        {/* Online bookings */}
-                        {seatBookings.map((b) => (
-                          <div key={b.id} className="mt-1.5 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-xs font-semibold text-gray-700">{b.customerName}</p>
-                                <p className="text-xs text-gray-500">{b.customerPhone}</p>
-                                <p className="text-xs text-blue-600 mt-0.5">
-                                  {b.durationMonths > 1
-                                    ? `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`
-                                    : monthLabel(b.month)
-                                  }
-                                </p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xs font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
-                                <Badge variant="default" className="text-[10px] px-1 py-0 mt-0.5">Paid Online</Badge>
-                                <div>
-                                  <button
-                                    className="text-[10px] text-red-400 hover:text-red-600 mt-1 block"
-                                    onClick={() => handleReleaseBooking(b.id)}
-                                  >
-                                    Release
-                                  </button>
-                                </div>
-                              </div>
+                      {/* Online bookings */}
+                      {seatBookings.map((b) => (
+                        <div key={b.id} className="mt-1.5 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-gray-700">{b.customerName}</p>
+                              <p className="text-xs text-gray-500">{b.customerPhone}</p>
+                              <p className="text-xs text-blue-600 mt-0.5">
+                                {b.durationMonths > 1
+                                  ? `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`
+                                  : monthLabel(b.month)
+                                }
+                                {b.startDay && b.startDay > 1 ? ` · from ${b.startDay}th` : ""}
+                              </p>
+                              {b.paymentDate && (
+                                <p className="text-xs text-gray-400">Paid {formatDate(b.paymentDate)}</p>
+                              )}
                             </div>
-                          </div>
-                        ))}
-
-                        {/* Offline booking */}
-                        {seat.isOfflineBooked && (
-                          <div className="mt-1.5 p-2 bg-orange-50 rounded-lg border border-orange-100">
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
+                              <Badge variant="default" className="text-[10px] px-1 py-0 mt-0.5">Paid Online</Badge>
                               <div>
-                                <p className="text-xs font-semibold text-gray-700">
-                                  {seat.offlineBookingName ?? "— Name not entered —"}
-                                </p>
-                                {seat.offlineBookingPhone && (
-                                  <p className="text-xs text-gray-500">{seat.offlineBookingPhone}</p>
-                                )}
-                                {seat.offlineBookingFrom && seat.offlineBookingUntil && (
-                                  <p className="text-xs text-orange-600 mt-0.5">
-                                    {monthLabel(seat.offlineBookingFrom)} → {monthLabel(seat.offlineBookingUntil)}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right shrink-0">
-                                <Badge className="text-[10px] px-1 py-0 bg-orange-100 text-orange-600 hover:bg-orange-100">Offline</Badge>
                                 <button
-                                  className="text-[10px] text-red-400 hover:text-red-600 mt-1 block ml-auto"
-                                  onClick={() => handleClearOffline(seat.id)}
+                                  className="text-[10px] text-red-400 hover:text-red-600 mt-1 block"
+                                  onClick={() => handleReleaseBooking(b.id)}
                                 >
-                                  Clear
+                                  Release
                                 </button>
                               </div>
                             </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      ))}
+
+                      {/* Offline booking */}
+                      {seat.isOfflineBooked && (
+                        <div className="mt-1.5 p-2 bg-orange-50 rounded-lg border border-orange-100">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-gray-700">
+                                {seat.offlineBookingName ?? "— Name not entered —"}
+                              </p>
+                              {seat.offlineBookingPhone && (
+                                <p className="text-xs text-gray-500">{seat.offlineBookingPhone}</p>
+                              )}
+                              {seat.offlineBookingFrom && seat.offlineBookingUntil && (
+                                <p className="text-xs text-orange-600 mt-0.5">
+                                  {monthLabel(seat.offlineBookingFrom)} → {monthLabel(seat.offlineBookingUntil)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              {offlineAmtDisplay && (
+                                <p className="text-xs font-bold text-primary mb-0.5">{offlineAmtDisplay}</p>
+                              )}
+                              <Badge className="text-[10px] px-1 py-0 bg-orange-100 text-orange-600 hover:bg-orange-100">Offline</Badge>
+                              <button
+                                className="text-[10px] text-red-400 hover:text-red-600 mt-1 block ml-auto"
+                                onClick={() => handleClearOffline(seat.id)}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -587,7 +725,7 @@ function ManagementListView() {
   );
 }
 
-// ──── Main Admin Dashboard shell ─────────────────────────────────────────────
+// ──── Main Admin Dashboard shell ──────────────────────────────────────────────
 export default function AdminDashboard() {
   const [, navigate] = useLocation();
   const [activeView, setActiveView] = useState<"dashboard" | "management">("dashboard");
