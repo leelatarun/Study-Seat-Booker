@@ -103,7 +103,7 @@ export default function Payment() {
                 },
               },
               sequence: ["block.upi", "block.credit", "block.debit"],
-              preferences: { show_default_blocks: true },
+              preferences: { show_default_blocks: false },
             },
           },
           modal: {
