@@ -4,6 +4,7 @@ import { db, bookingsTable, seatsTable, pricingTable } from "@workspace/db";
 import { InitiatePaymentBody, ConfirmPaymentBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import Razorpay from "razorpay";
+import { sendBookingConfirmations } from "../lib/notifications.js";
 
 const router: IRouter = Router();
 
@@ -104,7 +105,21 @@ router.post("/payments/confirm", async (req, res): Promise<void> => {
   if (!updated) { res.status(404).json({ error: "Booking not found" }); return; }
 
   const ctx = await getBookingWithContext(updated.id);
-  res.json(formatBooking(updated, ctx?.seat, ctx?.room2IsAc));
+  const formatted = formatBooking(updated, ctx?.seat, ctx?.room2IsAc);
+  res.json(formatted);
+
+  sendBookingConfirmations({
+    bookingId: formatted.id,
+    customerName: formatted.customerName,
+    customerPhone: formatted.customerPhone,
+    customerEmail: formatted.customerEmail,
+    seatNumber: formatted.seatNumber,
+    section: formatted.section,
+    month: formatted.month,
+    endMonth: formatted.endMonth,
+    durationMonths: formatted.durationMonths,
+    amount: formatted.amount,
+  }, req.log).catch(() => undefined);
 });
 
 // ── Razorpay: create order ────────────────────────────────────────────────────
@@ -196,7 +211,21 @@ router.post("/payments/verify", async (req, res): Promise<void> => {
   if (!updated) { res.status(404).json({ error: "Booking not found" }); return; }
 
   const ctx = await getBookingWithContext(updated.id);
-  res.json(formatBooking(updated, ctx?.seat, ctx?.room2IsAc));
+  const formatted = formatBooking(updated, ctx?.seat, ctx?.room2IsAc);
+  res.json(formatted);
+
+  sendBookingConfirmations({
+    bookingId: formatted.id,
+    customerName: formatted.customerName,
+    customerPhone: formatted.customerPhone,
+    customerEmail: formatted.customerEmail,
+    seatNumber: formatted.seatNumber,
+    section: formatted.section,
+    month: formatted.month,
+    endMonth: formatted.endMonth,
+    durationMonths: formatted.durationMonths,
+    amount: formatted.amount,
+  }, req.log).catch(() => undefined);
 });
 
 export default router;
