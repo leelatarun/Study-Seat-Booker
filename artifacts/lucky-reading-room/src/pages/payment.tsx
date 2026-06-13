@@ -1,13 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { useGetBooking, useInitiatePayment, useConfirmPayment, getGetBookingQueryKey } from "@workspace/api-client-react";
+import { useGetBooking, useInitiatePayment, getGetBookingQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-");
   return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) { resolve(true); return; }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 }
 
 export default function Payment() {
@@ -20,54 +35,110 @@ export default function Payment() {
   });
 
   const initiatePayment = useInitiatePayment();
-  const confirmPayment = useConfirmPayment();
 
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [card, setCard] = useState({ number: "", name: "", expiry: "", cvv: "" });
   const [error, setError] = useState("");
-  const [initiated, setInitiated] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [scriptReady, setScriptReady] = useState(false);
+  const initiated = useRef(false);
 
+  // Pre-load Razorpay script
   useEffect(() => {
-    if (booking && !initiated) {
-      setInitiated(true);
-      initiatePayment.mutate(
-        { data: { bookingId: booking.id } },
-        {
-          onSuccess: (session) => setSessionId(session.sessionId),
-          onError: () => setError("Could not initiate payment. Please try again."),
-        }
-      );
+    loadRazorpayScript().then(setScriptReady);
+  }, []);
+
+  // Auto-create internal session (kept for backwards compat)
+  useEffect(() => {
+    if (booking && !initiated.current) {
+      initiated.current = true;
+      initiatePayment.mutate({ data: { bookingId: booking.id } }, {
+        onError: () => setError("Could not start payment session. Please refresh."),
+      });
     }
-  }, [booking, initiated]);
+  }, [booking]);
 
-  const formatCardNumber = (val: string) =>
-    val.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
-
-  const formatExpiry = (val: string) => {
-    const d = val.replace(/\D/g, "").slice(0, 4);
-    return d.length >= 3 ? d.slice(0, 2) + "/" + d.slice(2) : d;
-  };
-
-  const handlePay = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sessionId || !booking) return;
+  const handlePay = async () => {
+    if (!booking || !scriptReady) return;
     setError("");
-    confirmPayment.mutate(
-      {
-        data: {
-          sessionId,
-          bookingId: booking.id,
-          cardNumber: card.number.replace(/\s/g, ""),
-          cardName: card.name,
-          expiry: card.expiry,
-          cvv: card.cvv,
-        },
-      },
-      {
-        onSuccess: () => navigate(`/confirmation/${booking.id}`),
-        onError: () => setError("Payment failed. Please check your card details and try again."),
+    setPaying(true);
+
+    try {
+      // 1. Create Razorpay order on our backend
+      const res = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: booking.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to create order");
       }
-    );
+      const { orderId, amount, currency, keyId } = await res.json();
+
+      // 2. Open Razorpay modal
+      await new Promise<void>((resolve, reject) => {
+        const options = {
+          key: keyId,
+          amount,
+          currency,
+          name: "Lucky Reading Room",
+          description: `Cabin ${booking.seatNumber} — ${monthLabel(booking.month)}`,
+          order_id: orderId,
+          prefill: {
+            name: booking.customerName,
+            contact: booking.customerPhone,
+            email: booking.customerEmail ?? "",
+          },
+          theme: { color: "#16a34a" },
+          modal: {
+            ondismiss: () => reject(new Error("cancelled")),
+          },
+          handler: async (response: {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              // 3. Verify signature on backend and confirm booking
+              const vRes = await fetch("/api/payments/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                  bookingId: booking.id,
+                }),
+              });
+              if (!vRes.ok) {
+                const err = await vRes.json().catch(() => ({}));
+                reject(new Error(err.error ?? "Verification failed"));
+              } else {
+                resolve();
+              }
+            } catch (e) {
+              reject(e);
+            }
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (response: any) => {
+          reject(new Error(response.error?.description ?? "Payment failed"));
+        });
+        rzp.open();
+      });
+
+      // Success!
+      navigate(`/confirmation/${booking.id}`);
+    } catch (err: any) {
+      if (err?.message === "cancelled") {
+        setError("Payment was cancelled. You can try again.");
+      } else {
+        setError(err?.message ?? "Payment failed. Please try again.");
+      }
+    } finally {
+      setPaying(false);
+    }
   };
 
   if (isLoading || !booking) {
@@ -121,65 +192,43 @@ export default function Payment() {
             </div>
           </div>
 
-          <form onSubmit={handlePay} className="p-6 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">Card Details</p>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Demo Mode</span>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="cardNumber">Card Number</Label>
-              <Input
-                id="cardNumber"
-                placeholder="1234 5678 9012 3456"
-                value={card.number}
-                onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
-                required
-                className="bg-gray-50 font-mono tracking-wider"
-                autoComplete="cc-number"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="cardName">Name on Card</Label>
-              <Input
-                id="cardName"
-                placeholder="As printed on card"
-                value={card.name}
-                onChange={(e) => setCard({ ...card, name: e.target.value })}
-                required
-                className="bg-gray-50"
-                autoComplete="cc-name"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="expiry">Expiry</Label>
-                <Input
-                  id="expiry"
-                  placeholder="MM/YY"
-                  value={card.expiry}
-                  onChange={(e) => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                  required
-                  maxLength={5}
-                  className="bg-gray-50 font-mono"
-                  autoComplete="cc-exp"
-                />
+          <div className="p-6 space-y-5">
+            {/* Razorpay branding */}
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#3395FF" opacity="0.9"/>
+                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#3395FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cvv">CVV</Label>
-                <Input
-                  id="cvv"
-                  type="password"
-                  placeholder="•••"
-                  value={card.cvv}
-                  onChange={(e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) })}
-                  required
-                  maxLength={4}
-                  className="bg-gray-50 font-mono"
-                  autoComplete="cc-csc"
-                />
+              <div className="text-center">
+                <p className="font-semibold text-gray-800">Pay with Razorpay</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  UPI · Cards · Net Banking · Wallets
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-600 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Booking for</span>
+                <span className="font-medium">{booking.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Cabin</span>
+                <span className="font-medium">#{booking.seatNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Period</span>
+                <span className="font-medium">
+                  {isMultiMonth
+                    ? `${booking.durationMonths} months`
+                    : monthLabel(booking.month)}
+                </span>
+              </div>
+              <div className="border-t border-gray-200 pt-2 flex justify-between">
+                <span className="font-semibold text-gray-700">Total</span>
+                <span className="font-bold text-primary text-base">₹{Number(booking.amount).toLocaleString("en-IN")}</span>
               </div>
             </div>
 
@@ -190,19 +239,27 @@ export default function Payment() {
             )}
 
             <Button
-              type="submit"
-              className="w-full h-11 text-base font-semibold"
-              disabled={confirmPayment.isPending || !sessionId}
+              className="w-full h-12 text-base font-semibold gap-2"
+              onClick={handlePay}
+              disabled={paying || !scriptReady}
             >
-              {confirmPayment.isPending
-                ? "Processing..."
-                : `Pay ₹${Number(booking.amount).toLocaleString("en-IN")}`}
+              {paying ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Opening Payment...
+                </>
+              ) : (
+                <>Pay ₹{Number(booking.amount).toLocaleString("en-IN")} via Razorpay</>
+              )}
             </Button>
 
             <p className="text-center text-xs text-gray-400">
-              Demo payment — no real charges made.
+              Secured by Razorpay · 256-bit SSL encryption
             </p>
-          </form>
+          </div>
         </div>
       </div>
     </div>

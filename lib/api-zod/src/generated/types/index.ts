@@ -21,5 +21,8 @@ export * from './paymentInitiate';
 export * from './paymentSession';
 export * from './pricing';
 export * from './pricingUpdate';
+export * from './razorpayOrderRequest';
+export * from './razorpayOrderResponse';
+export * from './razorpayVerifyRequest';
 export * from './seat';
 export * from './seatUpdate';

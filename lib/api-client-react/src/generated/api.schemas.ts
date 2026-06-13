@@ -137,6 +137,25 @@ export interface PaymentConfirm {
   cvv?: string;
 }
 
+export interface RazorpayOrderRequest {
+  bookingId: number;
+}
+
+export interface RazorpayOrderResponse {
+  orderId: string;
+  /** Amount in paise */
+  amount: number;
+  currency: string;
+  keyId: string;
+}
+
+export interface RazorpayVerifyRequest {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+  bookingId: number;
+}
+
 export interface Pricing {
   id: number;
   acPrice1m: number;

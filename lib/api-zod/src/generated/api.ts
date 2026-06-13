@@ -273,6 +273,51 @@ export const ConfirmPaymentResponse = zod.object({
 
 
 /**
+ * @summary Create a Razorpay order for a booking
+ */
+export const CreateRazorpayOrderBody = zod.object({
+  "bookingId": zod.number()
+})
+
+export const CreateRazorpayOrderResponse = zod.object({
+  "orderId": zod.string(),
+  "amount": zod.number().describe('Amount in paise'),
+  "currency": zod.string(),
+  "keyId": zod.string()
+})
+
+
+/**
+ * @summary Verify Razorpay payment signature and confirm booking
+ */
+export const VerifyRazorpayPaymentBody = zod.object({
+  "razorpayOrderId": zod.string(),
+  "razorpayPaymentId": zod.string(),
+  "razorpaySignature": zod.string(),
+  "bookingId": zod.number()
+})
+
+export const VerifyRazorpayPaymentResponse = zod.object({
+  "id": zod.number(),
+  "seatId": zod.number(),
+  "seatNumber": zod.number(),
+  "section": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "customerEmail": zod.string().nullish(),
+  "month": zod.string().describe('YYYY-MM start month'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking'),
+  "durationMonths": zod.number().describe('1, 2, 3, or 6'),
+  "amount": zod.number(),
+  "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish().describe('Day of month (1-31) when booking starts'),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
+  "paymentSessionId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Get current pricing
  */
 export const GetPricingResponse = zod.object({

@@ -256,6 +256,50 @@ paths:
         "400":
           description: Invalid payment session
 
+  /payments/create-order:
+    post:
+      operationId: createRazorpayOrder
+      tags: [payments]
+      summary: Create a Razorpay order for a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RazorpayOrderRequest"
+      responses:
+        "200":
+          description: Razorpay order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpayOrderResponse"
+        "404":
+          description: Booking not found
+        "500":
+          description: Razorpay API error
+
+  /payments/verify:
+    post:
+      operationId: verifyRazorpayPayment
+      tags: [payments]
+      summary: Verify Razorpay payment signature and confirm booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RazorpayVerifyRequest"
+      responses:
+        "200":
+          description: Payment verified and booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          description: Signature mismatch or missing fields
+
   /pricing:
     get:
       operationId: getPricing
@@ -508,6 +552,40 @@ components:
           type: string
         cvv:
           type: string
+
+    RazorpayOrderRequest:
+      type: object
+      required: [bookingId]
+      properties:
+        bookingId:
+          type: integer
+
+    RazorpayOrderResponse:
+      type: object
+      required: [orderId, amount, currency, keyId]
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: integer
+          description: Amount in paise
+        currency:
+          type: string
+        keyId:
+          type: string
+
+    RazorpayVerifyRequest:
+      type: object
+      required: [razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId]
+      properties:
+        razorpayOrderId:
+          type: string
+        razorpayPaymentId:
+          type: string
+        razorpaySignature:
+          type: string
+        bookingId:
+          type: integer
 
     Pricing:
       type: object
