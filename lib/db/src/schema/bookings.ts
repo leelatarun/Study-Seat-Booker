@@ -16,6 +16,7 @@ export const bookingsTable = pgTable("bookings", {
   status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
   paymentDate: text("payment_date"),    // YYYY-MM-DD when payment was confirmed
   paymentSessionId: text("payment_session_id"),
+  razorpayOrderId: text("razorpay_order_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

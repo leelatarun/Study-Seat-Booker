@@ -115,8 +115,31 @@ router.post("/payments/create-order", async (req, res): Promise<void> => {
   const ctx = await getBookingWithContext(bookingId);
   if (!ctx) { res.status(404).json({ error: "Booking not found" }); return; }
 
+  // Only pending bookings should be going through checkout
+  if (ctx.booking.status !== "pending") {
+    res.status(400).json({ error: "Booking is not in pending state" }); return;
+  }
+
   const amountPaise = Math.round(Number(ctx.booking.amount) * 100);
   if (amountPaise < 100) { res.status(400).json({ error: "Amount too small" }); return; }
+
+  // Reuse an existing unfulfilled Razorpay order to avoid duplicate orders on retry
+  if (ctx.booking.razorpayOrderId) {
+    try {
+      const existing = await getRazorpay().orders.fetch(ctx.booking.razorpayOrderId);
+      if (existing && existing.status === "created") {
+        res.json({
+          orderId: existing.id,
+          amount: amountPaise,
+          currency: "INR",
+          keyId: process.env.RAZORPAY_KEY_ID ?? "",
+        });
+        return;
+      }
+    } catch {
+      // Existing order fetch failed — fall through to create a new one
+    }
+  }
 
   try {
     const order = await getRazorpay().orders.create({
@@ -124,6 +147,9 @@ router.post("/payments/create-order", async (req, res): Promise<void> => {
       currency: "INR",
       receipt: `booking_${bookingId}`,
     });
+
+    // Persist the order ID so retries can reuse it
+    await db.update(bookingsTable).set({ razorpayOrderId: order.id }).where(eq(bookingsTable.id, bookingId));
 
     res.json({
       orderId: order.id,
