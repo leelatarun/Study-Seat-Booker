@@ -37,5 +37,5 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-VITE_RAZORPAY_KEY_ID = "rzp_test_T11nM3avQC7zQQ"
-RAZORPAY_KEY_ID = "rzp_test_T11nM3avQC7zQQ"
+VITE_RAZORPAY_KEY_ID = "rzp_live_T11sEghG7WFjI8"
+RAZORPAY_KEY_ID = "rzp_live_T11sEghG7WFjI8"
