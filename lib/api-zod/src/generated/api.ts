@@ -248,6 +248,39 @@ export const InitiatePaymentResponse = zod.object({
 
 
 /**
+ * @summary Admin - confirm a booking payment (UPI manual verification)
+ */
+export const ConfirmPaymentHeader = zod.object({
+  "x-admin-token": zod.string()
+})
+
+export const ConfirmPaymentBody = zod.object({
+  "bookingId": zod.number()
+})
+
+export const ConfirmPaymentResponse = zod.object({
+  "id": zod.number(),
+  "seatId": zod.number(),
+  "seatNumber": zod.number(),
+  "section": zod.string(),
+  "customerName": zod.string(),
+  "customerPhone": zod.string(),
+  "customerEmail": zod.string().nullish(),
+  "startDate": zod.string().nullish().describe('YYYY-MM-DD booking start date'),
+  "endDate": zod.string().nullish().describe('YYYY-MM-DD booking end date (inclusive)'),
+  "month": zod.string().describe('YYYY-MM start month (derived from startDate)'),
+  "endMonth": zod.string().describe('YYYY-MM last month of booking (derived from endDate)'),
+  "durationMonths": zod.number(),
+  "amount": zod.number(),
+  "status": zod.string().describe('pending | confirmed | cancelled'),
+  "startDay": zod.number().nullish(),
+  "paymentDate": zod.string().nullish().describe('YYYY-MM-DD when payment was confirmed'),
+  "paymentSessionId": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Get current pricing
  */
 export const GetPricingResponse = zod.object({

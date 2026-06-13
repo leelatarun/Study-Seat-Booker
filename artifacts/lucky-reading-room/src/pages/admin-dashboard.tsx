@@ -10,6 +10,7 @@ import {
   useUpdatePricing,
   useUpdateBooking,
   useCreateBooking,
+  useConfirmPayment,
   getListBookingsQueryKey,
   getListSeatsQueryKey,
   getGetBookingSummaryQueryKey,
@@ -149,7 +150,7 @@ function AdminBookingForm({
 }) {
   const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
   const createBooking = useCreateBooking();
-  const updateBooking = useUpdateBooking({ request: adminReq });
+  const confirmPayment = useConfirmPayment({ request: adminReq });
 
   const [form, setForm] = useState({
     name: "",
@@ -176,8 +177,8 @@ function AdminBookingForm({
       { data: { seatId: seat.id, customerName: form.name, customerPhone: form.phone, customerEmail: form.email || undefined, startDate: form.startDate, endDate: form.endDate } },
       {
         onSuccess: (booking) => {
-          updateBooking.mutate(
-            { id: booking.id, data: { status: "confirmed" } },
+          confirmPayment.mutate(
+            { data: { bookingId: booking.id } },
             {
               onSuccess: () => { setSaving(false); onSuccess(); onClose(); },
               onError: () => { setSaving(false); setError("Created but could not auto-confirm. Please confirm manually."); onSuccess(); },
@@ -261,6 +262,7 @@ function DashboardView() {
   const updateSeat = useUpdateSeat({ request: adminReq });
   const updatePricing = useUpdatePricing({ request: adminReq });
   const updateBooking = useUpdateBooking({ request: adminReq });
+  const confirmPayment = useConfirmPayment({ request: adminReq });
 
   const invalidateSeats = () => queryClient.invalidateQueries({ queryKey: getListSeatsQueryKey({ month }) });
   const invalidateBookings = () => {
@@ -325,8 +327,8 @@ function DashboardView() {
 
   const handleConfirmBooking = (bookingId: number) => {
     if (!confirm("Confirm this booking? This marks payment as received.")) return;
-    updateBooking.mutate(
-      { id: bookingId, data: { status: "confirmed" } },
+    confirmPayment.mutate(
+      { data: { bookingId } },
       { onSuccess: () => { invalidateBookings(); invalidateSeats(); } }
     );
   };
@@ -569,6 +571,7 @@ function ManagementListView() {
   const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
   const updateSeat = useUpdateSeat({ request: adminReq });
   const updateBooking = useUpdateBooking({ request: adminReq });
+  const confirmPayment = useConfirmPayment({ request: adminReq });
 
   const confirmedBookings = allBookings.filter((b) => b.status === "confirmed");
   const pendingBookings = allBookings.filter((b) => b.status === "pending");
@@ -595,8 +598,8 @@ function ManagementListView() {
 
   const handleConfirmPending = (bookingId: number) => {
     if (!confirm("Confirm this pending booking?")) return;
-    updateBooking.mutate(
-      { id: bookingId, data: { status: "confirmed" } },
+    confirmPayment.mutate(
+      { data: { bookingId } },
       { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey({}) }) }
     );
   };

@@ -132,6 +132,10 @@ export interface PaymentSession {
   expiresAt: string;
 }
 
+export interface PaymentConfirm {
+  bookingId: number;
+}
+
 export interface Pricing {
   id: number;
   acPrice1m: number;

@@ -16,6 +16,7 @@ export * from './getBookingSummaryParams';
 export * from './healthStatus';
 export * from './listBookingsParams';
 export * from './listSeatsParams';
+export * from './paymentConfirm';
 export * from './paymentInitiate';
 export * from './paymentSession';
 export * from './pricing';

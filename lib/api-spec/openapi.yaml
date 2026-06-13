@@ -247,6 +247,35 @@ paths:
         "404":
           description: Booking not found
 
+  /payments/confirm:
+    post:
+      operationId: confirmPayment
+      tags: [payments]
+      summary: Admin - confirm a booking payment (UPI manual verification)
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentConfirm"
+      responses:
+        "200":
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Booking not found
+
   /pricing:
     get:
       operationId: getPricing
@@ -482,6 +511,13 @@ components:
           type: number
         expiresAt:
           type: string
+
+    PaymentConfirm:
+      type: object
+      required: [bookingId]
+      properties:
+        bookingId:
+          type: integer
 
     Pricing:
       type: object

@@ -30,6 +30,7 @@ import type {
   HealthStatus,
   ListBookingsParams,
   ListSeatsParams,
+  PaymentConfirm,
   PaymentInitiate,
   PaymentSession,
   Pricing,
@@ -818,6 +819,77 @@ export const useInitiatePayment = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getInitiatePaymentMutationOptions(options));
+    }
+
+export const getConfirmPaymentUrl = () => {
+
+
+
+
+  return `/api/payments/confirm`
+}
+
+/**
+ * @summary Admin - confirm a booking payment (UPI manual verification)
+ */
+export const confirmPayment = async (paymentConfirm: PaymentConfirm, options?: RequestInit): Promise<Booking> => {
+
+  return customFetch<Booking>(getConfirmPaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      paymentConfirm,)
+  }
+);}
+
+
+
+
+export const getConfirmPaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPayment>>, TError,{data: BodyType<PaymentConfirm>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmPayment>>, TError,{data: BodyType<PaymentConfirm>}, TContext> => {
+
+const mutationKey = ['confirmPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmPayment>>, {data: BodyType<PaymentConfirm>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmPayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof confirmPayment>>>
+    export type ConfirmPaymentMutationBody = BodyType<PaymentConfirm>
+    export type ConfirmPaymentMutationError = ErrorType<void>
+
+    /**
+ * @summary Admin - confirm a booking payment (UPI manual verification)
+ */
+export const useConfirmPayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPayment>>, TError,{data: BodyType<PaymentConfirm>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmPayment>>,
+        TError,
+        {data: BodyType<PaymentConfirm>},
+        TContext
+      > => {
+      return useMutation(getConfirmPaymentMutationOptions(options));
     }
 
 export const getGetPricingUrl = () => {
