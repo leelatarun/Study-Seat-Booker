@@ -24,13 +24,18 @@ function formatSeat(
   extra?: { bookedForMonth?: boolean | null; bookingId?: number | null; bookedByName?: string | null }
 ) {
   const effective = computeEffectiveSection(seat, room2IsAc);
+  // Auto-expire offline bookings: once today passes offlineBookingUntil, treat seat as available
+  const today = new Date().toISOString().split("T")[0];
+  const effectiveOfflineBooked =
+    seat.isOfflineBooked &&
+    (!seat.offlineBookingUntil || seat.offlineBookingUntil >= today);
   return {
     id: seat.id,
     seatNumber: seat.seatNumber,
     section: effective.section,
     room: seat.room,
     isAC: effective.isAC,
-    isOfflineBooked: seat.isOfflineBooked,
+    isOfflineBooked: effectiveOfflineBooked,
     offlineBookingName: seat.offlineBookingName ?? null,
     offlineBookingPhone: seat.offlineBookingPhone ?? null,
     offlineBookingFrom: seat.offlineBookingFrom ?? null,

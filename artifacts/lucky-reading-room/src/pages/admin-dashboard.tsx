@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { format, addMonths, subMonths, parseISO } from "date-fns";
+import { format, addMonths, subMonths, addDays, parseISO } from "date-fns";
 import {
   useListBookings,
   useListSeats,
@@ -54,9 +54,15 @@ function nextMonth(ym: string): string {
 }
 
 function countMonthsInRange(from: string, until: string): number {
-  const [fy, fm] = from.split("-").map(Number);
-  const [uy, um] = until.split("-").map(Number);
-  return Math.max(1, (uy - fy) * 12 + (um - fm) + 1);
+  try {
+    // Handle both YYYY-MM and YYYY-MM-DD formats
+    const f = from.length === 7 ? new Date(from + "-01") : new Date(from);
+    const u = until.length === 7 ? new Date(until + "-01") : new Date(until);
+    const months = (u.getFullYear() - f.getFullYear()) * 12 + (u.getMonth() - f.getMonth());
+    return Math.max(1, months + 1);
+  } catch {
+    return 1;
+  }
 }
 
 function formatDate(dateStr: string | null): string {
@@ -68,25 +74,41 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
+// Display helper that handles both YYYY-MM and YYYY-MM-DD
+function dateLabel(s: string | null | undefined): string {
+  if (!s) return "—";
+  try {
+    if (s.length === 7) {
+      // YYYY-MM — show as "Jul 2026"
+      const [y, m] = s.split("-").map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    }
+    return parseISO(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return s;
+  }
+}
+
 // ──── Offline booking form ────────────────────────────────────────────────────
 function OfflineForm({
   seat,
-  months,
   onSave,
   onCancel,
   pricing,
 }: {
   seat: Seat;
-  months: { value: string; label: string }[];
   onSave: (data: { name: string; phone: string; from: string; until: string }) => void;
   onCancel: () => void;
   pricing: any;
 }) {
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const oneMonthLaterStr = format(addMonths(new Date(), 1), "yyyy-MM-dd");
+
   const [form, setForm] = useState({
     name: seat.offlineBookingName ?? "",
     phone: seat.offlineBookingPhone ?? "",
-    from: seat.offlineBookingFrom ?? months[0].value,
-    until: seat.offlineBookingUntil ?? months[0].value,
+    from: seat.offlineBookingFrom ?? todayStr,
+    until: seat.offlineBookingUntil ?? oneMonthLaterStr,
   });
 
   const numMonths = countMonthsInRange(form.from, form.until);
@@ -118,30 +140,27 @@ function OfflineForm({
           />
         </div>
         <div>
-          <Label className="text-xs text-gray-500">From</Label>
-          <Select value={form.from} onValueChange={(v) => setForm({ ...form, from: v })}>
-            <SelectTrigger className="h-8 text-xs bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label className="text-xs text-gray-500">From date</Label>
+          <Input
+            type="date"
+            value={form.from}
+            onChange={(e) => setForm({ ...form, from: e.target.value })}
+            className="h-8 text-sm bg-white"
+          />
         </div>
         <div>
-          <Label className="text-xs text-gray-500">Until</Label>
-          <Select value={form.until} onValueChange={(v) => setForm({ ...form, until: v })}>
-            <SelectTrigger className="h-8 text-xs bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label className="text-xs text-gray-500">Until date</Label>
+          <Input
+            type="date"
+            value={form.until}
+            min={form.from}
+            onChange={(e) => setForm({ ...form, until: e.target.value })}
+            className="h-8 text-sm bg-white"
+          />
         </div>
       </div>
       <div className="bg-white rounded-lg px-3 py-2 border border-orange-100 flex items-center justify-between">
-        <span className="text-xs text-gray-500">{numMonths} month{numMonths !== 1 ? "s" : ""} × ₹{monthlyPrice.toLocaleString("en-IN")}/mo</span>
+        <span className="text-xs text-gray-500">~{numMonths} month{numMonths !== 1 ? "s" : ""} × ₹{monthlyPrice.toLocaleString("en-IN")}/mo</span>
         <span className="text-sm font-bold text-primary">₹{totalPrice.toLocaleString("en-IN")}</span>
       </div>
       <div className="flex gap-2">
@@ -547,7 +566,6 @@ function DashboardView() {
                   {showForm && (
                     <OfflineForm
                       seat={seat}
-                      months={months}
                       onSave={(data) => handleSaveOffline(seat.id, data)}
                       onCancel={() => setExpandedOfflineId(null)}
                       pricing={pricing}
@@ -610,144 +628,271 @@ function ManagementListView() {
     );
   };
 
-  const sections = [
-    { label: "Room 1 — AC (Seats 1–48)", seats: allSeats.filter((s) => s.room === 1) },
-    { label: "Room 2 (Seats 49–93)", seats: allSeats.filter((s) => s.room === 2) },
-    { label: "Common Area (Seats 94–96)", seats: allSeats.filter((s) => s.room === 3) },
+  const ROOM_TABS = [
+    { room: 1 as const, label: "Room 1 (AC)", sublabel: "Seats 1–48", seats: allSeats.filter((s) => s.room === 1) },
+    { room: 2 as const, label: "Room 2",      sublabel: "Seats 49–93", seats: allSeats.filter((s) => s.room === 2) },
+    { room: 3 as const, label: "Common Area", sublabel: "Seats 94–96", seats: allSeats.filter((s) => s.room === 3) },
   ];
+
+  const [activeRoom, setActiveRoom] = useState<1 | 2 | 3>(1);
+  const [vacanciesOpen, setVacanciesOpen] = useState(true);
+
+  const activeTab = ROOM_TABS.find((t) => t.room === activeRoom)!;
+  const activeSeats = activeTab.seats;
+
+  // Upcoming vacancies — seats with any booking ending within the next 30 days
+  const now = new Date();
+  const soon = addDays(now, 30);
+
+  type VacancyItem = {
+    seat: typeof activeSeats[0];
+    endDateStr: string;
+    endDate: Date;
+    holderName: string;
+    type: "online" | "offline";
+  };
+
+  const upcomingVacancies: VacancyItem[] = [];
+  activeSeats.forEach((seat) => {
+    const seatBookings = bookingsBySeat.get(seat.id) ?? [];
+    seatBookings.forEach((b) => {
+      // endMonth is "YYYY-MM"; last day of that month
+      const [y, m] = b.endMonth.split("-").map(Number);
+      const endDate = new Date(y, m, 0); // last day
+      if (endDate >= now && endDate <= soon) {
+        upcomingVacancies.push({
+          seat,
+          endDateStr: b.endMonth,
+          endDate,
+          holderName: b.customerName,
+          type: "online",
+        });
+      }
+    });
+    if (seat.isOfflineBooked && seat.offlineBookingUntil) {
+      const endDate = new Date(seat.offlineBookingUntil);
+      if (endDate >= now && endDate <= soon) {
+        upcomingVacancies.push({
+          seat,
+          endDateStr: seat.offlineBookingUntil,
+          endDate,
+          holderName: seat.offlineBookingName ?? "—",
+          type: "offline",
+        });
+      }
+    }
+  });
+  upcomingVacancies.sort((a, b) => a.endDate.getTime() - b.endDate.getTime());
+
+  const renderSeatCard = (seat: typeof activeSeats[0]) => {
+    const seatBookings = bookingsBySeat.get(seat.id) ?? [];
+    const isEmpty = seatBookings.length === 0 && !seat.isOfflineBooked;
+
+    let offlineAmtDisplay = "";
+    if (seat.isOfflineBooked && seat.offlineBookingFrom && seat.offlineBookingUntil && pricing) {
+      const n = countMonthsInRange(seat.offlineBookingFrom, seat.offlineBookingUntil);
+      const monthlyPrice = seat.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m;
+      offlineAmtDisplay = `₹${(n * monthlyPrice).toLocaleString("en-IN")}`;
+    }
+
+    return (
+      <div key={seat.id} className="px-5 py-3">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+            isEmpty
+              ? "bg-green-50 text-green-600 border border-green-200"
+              : seat.isOfflineBooked
+              ? "bg-orange-50 text-orange-600 border border-orange-200"
+              : "bg-blue-50 text-blue-600 border border-blue-200"
+          }`}>
+            {seat.seatNumber}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-gray-800">Seat {seat.seatNumber}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
+                {seat.section === "AC" ? "AC" : "Non-AC"}
+              </span>
+              {isEmpty && <span className="text-xs text-green-600 font-medium">Available</span>}
+            </div>
+
+            {/* Online bookings */}
+            {seatBookings.map((b) => (
+              <div key={b.id} className="mt-1.5 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs font-semibold text-gray-700">{b.customerName}</p>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-blue-600">Online</Badge>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Paid</Badge>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{b.customerPhone}</p>
+                    <p className="text-xs text-blue-600 mt-0.5">
+                      {b.durationMonths > 1
+                        ? `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`
+                        : monthLabel(b.month)}
+                      {b.startDay && b.startDay > 1 ? ` · from ${b.startDay}th` : ""}
+                    </p>
+                    {b.paymentDate && (
+                      <p className="text-xs text-gray-400">Paid {formatDate(b.paymentDate)}</p>
+                    )}
+                    {b.paymentSessionId?.startsWith("pay_") && (
+                      <a
+                        href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-white border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono max-w-[160px] truncate"
+                        title={b.paymentSessionId}
+                      >
+                        {b.paymentSessionId}
+                        <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
+                    <button
+                      className="text-[10px] text-red-400 hover:text-red-600 mt-1 block ml-auto"
+                      onClick={() => handleReleaseBooking(b.id)}
+                    >
+                      Release
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Offline booking */}
+            {seat.isOfflineBooked && (
+              <div className="mt-1.5 p-2.5 bg-orange-50 rounded-lg border border-orange-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {seat.offlineBookingName ?? "— Name not entered —"}
+                      </p>
+                      <Badge className="text-[10px] px-1.5 py-0 bg-orange-500 hover:bg-orange-500">Offline</Badge>
+                    </div>
+                    {seat.offlineBookingPhone && (
+                      <p className="text-xs text-gray-500 mt-0.5">{seat.offlineBookingPhone}</p>
+                    )}
+                    {seat.offlineBookingFrom && seat.offlineBookingUntil && (
+                      <p className="text-xs text-orange-600 mt-0.5">
+                        {dateLabel(seat.offlineBookingFrom)} → {dateLabel(seat.offlineBookingUntil)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    {offlineAmtDisplay && (
+                      <p className="text-xs font-bold text-primary mb-1">{offlineAmtDisplay}</p>
+                    )}
+                    <button
+                      className="text-[10px] text-red-400 hover:text-red-600 block ml-auto"
+                      onClick={() => handleClearOffline(seat.id)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <p className="text-sm text-gray-400 mb-6">
-        All {allSeats.length} seats — showing all confirmed bookings.
-        <span className="ml-2 text-primary font-medium">
-          {confirmedBookings.length} confirmed booking{confirmedBookings.length !== 1 ? "s" : ""}.
-        </span>
-      </p>
+      {/* Room tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5 w-fit">
+        {ROOM_TABS.map((tab) => {
+          const occupied = tab.seats.filter(
+            (s) => s.isOfflineBooked || (bookingsBySeat.get(s.id) ?? []).length > 0
+          ).length;
+          return (
+            <button
+              key={tab.room}
+              onClick={() => setActiveRoom(tab.room)}
+              className={`flex flex-col items-center px-4 py-2 rounded-lg text-xs font-medium transition-all ${
+                activeRoom === tab.room
+                  ? "bg-white text-gray-800 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <span className="font-semibold">{tab.label}</span>
+              <span className={`text-[10px] mt-0.5 ${activeRoom === tab.room ? "text-primary" : "text-gray-400"}`}>
+                {tab.sublabel} · {occupied}/{tab.seats.length} booked
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-      {sections.map(({ label, seats }) => (
-        <div key={label} className="mb-8">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">{label}</h2>
-          <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden divide-y divide-gray-50">
-            {seats.map((seat) => {
-              const seatBookings = bookingsBySeat.get(seat.id) ?? [];
-              const isEmpty = seatBookings.length === 0 && !seat.isOfflineBooked;
-
-              let offlineAmtDisplay = "";
-              if (seat.isOfflineBooked && seat.offlineBookingFrom && seat.offlineBookingUntil && pricing) {
-                const n = countMonthsInRange(seat.offlineBookingFrom, seat.offlineBookingUntil);
-                const monthlyPrice = seat.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m;
-                offlineAmtDisplay = `₹${(n * monthlyPrice).toLocaleString("en-IN")}`;
-              }
-
-              return (
-                <div key={seat.id} className="px-5 py-3">
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isEmpty
-                        ? "bg-green-50 text-green-600 border border-green-200"
-                        : seat.isOfflineBooked
-                        ? "bg-orange-50 text-orange-600 border border-orange-200"
-                        : "bg-blue-50 text-blue-600 border border-blue-200"
-                    }`}>
-                      {seat.seatNumber}
+      {/* Upcoming Vacancies panel */}
+      {upcomingVacancies.length > 0 && (
+        <div className="mb-5 border border-amber-200 rounded-xl bg-amber-50 overflow-hidden">
+          <button
+            onClick={() => setVacanciesOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs font-semibold text-amber-800">
+                Upcoming Vacancies in Next 30 Days
+              </span>
+              <span className="bg-amber-200 text-amber-800 text-[10px] font-bold rounded-full px-2 py-0.5">
+                {upcomingVacancies.length}
+              </span>
+            </div>
+            <svg
+              className={`w-4 h-4 text-amber-500 transition-transform ${vacanciesOpen ? "rotate-180" : ""}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {vacanciesOpen && (
+            <div className="border-t border-amber-200 divide-y divide-amber-100">
+              {upcomingVacancies.map((v, i) => (
+                <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-md bg-amber-100 border border-amber-200 flex items-center justify-center text-[10px] font-bold text-amber-700">
+                      {v.seat.seatNumber}
                     </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-800">Seat {seat.seatNumber}</span>
-                        <span className="text-xs text-gray-400">{seat.section === "AC" ? "AC" : "Non-AC"}</span>
-                        {isEmpty && <span className="text-xs text-green-600 font-medium">Available</span>}
-                      </div>
-
-                      {/* Online bookings */}
-                      {seatBookings.map((b) => (
-                        <div key={b.id} className="mt-1.5 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-xs font-semibold text-gray-700">{b.customerName}</p>
-                              <p className="text-xs text-gray-500">{b.customerPhone}</p>
-                              <p className="text-xs text-blue-600 mt-0.5">
-                                {b.durationMonths > 1
-                                  ? `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`
-                                  : monthLabel(b.month)
-                                }
-                                {b.startDay && b.startDay > 1 ? ` · from ${b.startDay}th` : ""}
-                              </p>
-                              {b.paymentDate && (
-                                <p className="text-xs text-gray-400">Paid {formatDate(b.paymentDate)}</p>
-                              )}
-                              {b.paymentSessionId?.startsWith("pay_") && (
-                                <a
-                                  href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono max-w-[140px] truncate"
-                                  title={b.paymentSessionId}
-                                >
-                                  {b.paymentSessionId}
-                                  <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </a>
-                              )}
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
-                              <Badge variant="default" className="text-[10px] px-1 py-0 mt-0.5">Paid Online</Badge>
-                              <div>
-                                <button
-                                  className="text-[10px] text-red-400 hover:text-red-600 mt-1 block"
-                                  onClick={() => handleReleaseBooking(b.id)}
-                                >
-                                  Release
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Offline booking */}
-                      {seat.isOfflineBooked && (
-                        <div className="mt-1.5 p-2 bg-orange-50 rounded-lg border border-orange-100">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-xs font-semibold text-gray-700">
-                                {seat.offlineBookingName ?? "— Name not entered —"}
-                              </p>
-                              {seat.offlineBookingPhone && (
-                                <p className="text-xs text-gray-500">{seat.offlineBookingPhone}</p>
-                              )}
-                              {seat.offlineBookingFrom && seat.offlineBookingUntil && (
-                                <p className="text-xs text-orange-600 mt-0.5">
-                                  {monthLabel(seat.offlineBookingFrom)} → {monthLabel(seat.offlineBookingUntil)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right shrink-0">
-                              {offlineAmtDisplay && (
-                                <p className="text-xs font-bold text-primary mb-0.5">{offlineAmtDisplay}</p>
-                              )}
-                              <Badge className="text-[10px] px-1 py-0 bg-orange-100 text-orange-600 hover:bg-orange-100">Offline</Badge>
-                              <button
-                                className="text-[10px] text-red-400 hover:text-red-600 mt-1 block ml-auto"
-                                onClick={() => handleClearOffline(seat.id)}
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">{v.holderName}</p>
+                      <p className="text-[10px] text-gray-500">Seat {v.seat.seatNumber} · {v.seat.section}</p>
                     </div>
                   </div>
+                  <div className="text-right shrink-0">
+                    <Badge className={`text-[10px] px-1.5 py-0 ${v.type === "online" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-orange-100 text-orange-700 hover:bg-orange-100"}`}>
+                      {v.type === "online" ? "Online" : "Offline"}
+                    </Badge>
+                    <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                      Ends {dateLabel(v.endDateStr)}
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      ))}
+      )}
+
+      {/* Seat cards for active tab */}
+      <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden divide-y divide-gray-50">
+        {activeSeats.length === 0 ? (
+          <p className="p-6 text-sm text-gray-400 text-center">No seats in this room.</p>
+        ) : (
+          activeSeats.map(renderSeatCard)
+        )}
+      </div>
     </div>
   );
 }
