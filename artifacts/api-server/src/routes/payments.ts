@@ -127,7 +127,7 @@ router.post("/payments/create-order", async (req, res): Promise<void> => {
   if (ctx.booking.razorpayOrderId) {
     try {
       const existing = await getRazorpay().orders.fetch(ctx.booking.razorpayOrderId);
-      if (existing && existing.status === "created") {
+      if (existing && (existing.status === "created" || existing.status === "attempted")) {
         res.json({
           orderId: existing.id,
           amount: amountPaise,
