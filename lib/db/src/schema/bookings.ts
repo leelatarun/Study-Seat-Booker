@@ -8,13 +8,15 @@ export const bookingsTable = pgTable("bookings", {
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
   customerEmail: text("customer_email"),
-  month: text("month").notNull(),       // YYYY-MM start month
-  endMonth: text("end_month").notNull(), // YYYY-MM last month of booking
-  durationMonths: integer("duration_months").notNull().default(1), // 1,2,3,6
-  startDay: integer("start_day"),       // Day of month (1-31) the booking starts
+  startDate: text("start_date"),               // YYYY-MM-DD — primary date fields
+  endDate: text("end_date"),                   // YYYY-MM-DD — primary date fields
+  month: text("month").notNull(),              // YYYY-MM derived from startDate (kept for query compat)
+  endMonth: text("end_month").notNull(),       // YYYY-MM derived from endDate
+  durationMonths: integer("duration_months").notNull().default(1),
+  startDay: integer("start_day"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"), // pending | confirmed | cancelled
-  paymentDate: text("payment_date"),    // YYYY-MM-DD when payment was confirmed
+  paymentDate: text("payment_date"),
   paymentSessionId: text("payment_session_id"),
   razorpayOrderId: text("razorpay_order_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

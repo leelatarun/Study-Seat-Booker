@@ -218,7 +218,7 @@ paths:
     post:
       operationId: initiatePayment
       tags: [payments]
-      summary: Initiate a demo payment for a booking
+      summary: Record that payment was initiated (UPI flow)
       requestBody:
         required: true
         content:
@@ -227,78 +227,13 @@ paths:
               $ref: "#/components/schemas/PaymentInitiate"
       responses:
         "200":
-          description: Payment session created
+          description: Payment session acknowledged
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentSession"
         "404":
           description: Booking not found
-
-  /payments/confirm:
-    post:
-      operationId: confirmPayment
-      tags: [payments]
-      summary: Confirm a demo payment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentConfirm"
-      responses:
-        "200":
-          description: Payment confirmed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Booking"
-        "400":
-          description: Invalid payment session
-
-  /payments/create-order:
-    post:
-      operationId: createRazorpayOrder
-      tags: [payments]
-      summary: Create a Razorpay order for a booking
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RazorpayOrderRequest"
-      responses:
-        "200":
-          description: Razorpay order created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RazorpayOrderResponse"
-        "404":
-          description: Booking not found
-        "500":
-          description: Razorpay API error
-
-  /payments/verify:
-    post:
-      operationId: verifyRazorpayPayment
-      tags: [payments]
-      summary: Verify Razorpay payment signature and confirm booking
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RazorpayVerifyRequest"
-      responses:
-        "200":
-          description: Payment verified and booking confirmed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Booking"
-        "400":
-          description: Signature mismatch or missing fields
 
   /pricing:
     get:
@@ -389,10 +324,10 @@ components:
           type: ["string", "null"]
         offlineBookingFrom:
           type: ["string", "null"]
-          description: "YYYY-MM start month for offline booking"
+          description: "YYYY-MM-DD start date for offline booking"
         offlineBookingUntil:
           type: ["string", "null"]
-          description: "YYYY-MM end month for offline booking"
+          description: "YYYY-MM-DD end date for offline booking"
         price:
           type: number
           description: "1-month price for this seat"
@@ -440,15 +375,20 @@ components:
           type: string
         customerEmail:
           type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+          description: "YYYY-MM-DD booking start date"
+        endDate:
+          type: ["string", "null"]
+          description: "YYYY-MM-DD booking end date (inclusive)"
         month:
           type: string
-          description: "YYYY-MM start month"
+          description: "YYYY-MM start month (derived from startDate)"
         endMonth:
           type: string
-          description: "YYYY-MM last month of booking"
+          description: "YYYY-MM last month of booking (derived from endDate)"
         durationMonths:
           type: integer
-          description: "1, 2, 3, or 6"
         amount:
           type: number
         status:
@@ -456,7 +396,6 @@ components:
           description: "pending | confirmed | cancelled"
         startDay:
           type: ["integer", "null"]
-          description: "Day of month (1-31) when booking starts"
         paymentDate:
           type: ["string", "null"]
           description: "YYYY-MM-DD when payment was confirmed"
@@ -467,7 +406,7 @@ components:
 
     BookingInput:
       type: object
-      required: [seatId, customerName, customerPhone, month]
+      required: [seatId, customerName, customerPhone, startDate, endDate]
       properties:
         seatId:
           type: integer
@@ -479,16 +418,12 @@ components:
           minLength: 10
         customerEmail:
           type: string
-        month:
+        startDate:
           type: string
-          description: "YYYY-MM start month"
-        durationMonths:
-          type: integer
-          description: "1, 2, 3, or 6 — defaults to 1"
-          default: 1
-        startDay:
-          type: integer
-          description: "Day of month (1-31) when booking starts — defaults to 1"
+          description: "Booking start date YYYY-MM-DD (must not be in the past)"
+        endDate:
+          type: string
+          description: "Booking end date YYYY-MM-DD (inclusive, must be >= startDate)"
 
     BookingUpdate:
       type: object
@@ -535,57 +470,6 @@ components:
           type: number
         expiresAt:
           type: string
-
-    PaymentConfirm:
-      type: object
-      required: [sessionId, bookingId]
-      properties:
-        sessionId:
-          type: string
-        bookingId:
-          type: integer
-        cardNumber:
-          type: string
-        cardName:
-          type: string
-        expiry:
-          type: string
-        cvv:
-          type: string
-
-    RazorpayOrderRequest:
-      type: object
-      required: [bookingId]
-      properties:
-        bookingId:
-          type: integer
-
-    RazorpayOrderResponse:
-      type: object
-      required: [orderId, amount, currency, keyId]
-      properties:
-        orderId:
-          type: string
-        amount:
-          type: integer
-          description: Amount in paise
-        currency:
-          type: string
-        keyId:
-          type: string
-
-    RazorpayVerifyRequest:
-      type: object
-      required: [razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId]
-      properties:
-        razorpayOrderId:
-          type: string
-        razorpayPaymentId:
-          type: string
-        razorpaySignature:
-          type: string
-        bookingId:
-          type: integer
 
     Pricing:
       type: object

@@ -15,19 +15,25 @@ export interface Booking {
   customerPhone: string;
   /** @nullable */
   customerEmail?: string | null;
-  /** YYYY-MM start month */
+  /**
+     * YYYY-MM-DD booking start date
+     * @nullable
+     */
+  startDate?: string | null;
+  /**
+     * YYYY-MM-DD booking end date (inclusive)
+     * @nullable
+     */
+  endDate?: string | null;
+  /** YYYY-MM start month (derived from startDate) */
   month: string;
-  /** YYYY-MM last month of booking */
+  /** YYYY-MM last month of booking (derived from endDate) */
   endMonth: string;
-  /** 1, 2, 3, or 6 */
   durationMonths: number;
   amount: number;
   /** pending | confirmed | cancelled */
   status: string;
-  /**
-     * Day of month (1-31) when booking starts
-     * @nullable
-     */
+  /** @nullable */
   startDay?: number | null;
   /**
      * YYYY-MM-DD when payment was confirmed

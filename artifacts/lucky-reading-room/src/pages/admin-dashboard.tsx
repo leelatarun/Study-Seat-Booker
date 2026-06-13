@@ -24,7 +24,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { LayoutDashboard, Users, LogOut, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 
-// Always generate from current real-time month
 const getMonths = () => {
   const now = new Date();
   const base = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -55,7 +54,6 @@ function nextMonth(ym: string): string {
 
 function countMonthsInRange(from: string, until: string): number {
   try {
-    // Handle both YYYY-MM and YYYY-MM-DD formats
     const f = from.length === 7 ? new Date(from + "-01") : new Date(from);
     const u = until.length === 7 ? new Date(until + "-01") : new Date(until);
     const months = (u.getFullYear() - f.getFullYear()) * 12 + (u.getMonth() - f.getMonth());
@@ -65,28 +63,27 @@ function countMonthsInRange(from: string, until: string): number {
   }
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   try {
+    if (dateStr.length === 7) {
+      const [y, m] = dateStr.split("-").map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    }
     return parseISO(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   } catch {
     return dateStr;
   }
 }
 
-// Display helper that handles both YYYY-MM and YYYY-MM-DD
-function dateLabel(s: string | null | undefined): string {
-  if (!s) return "—";
-  try {
-    if (s.length === 7) {
-      // YYYY-MM — show as "Jul 2026"
-      const [y, m] = s.split("-").map(Number);
-      return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-    }
-    return parseISO(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  } catch {
-    return s;
+function bookingPeriodLabel(b: Booking): string {
+  if (b.startDate && b.endDate) {
+    return `${formatDate(b.startDate)} → ${formatDate(b.endDate)}`;
   }
+  if (b.durationMonths > 1) {
+    return `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`;
+  }
+  return monthLabel(b.month);
 }
 
 // ──── Offline booking form ────────────────────────────────────────────────────
@@ -174,7 +171,6 @@ function OfflineForm({
 // ──── Dashboard view ──────────────────────────────────────────────────────────
 function DashboardView() {
   const queryClient = useQueryClient();
-  const months = getMonths();
   const [month, setMonth] = useState(currentMonth());
   const [bookingTab, setBookingTab] = useState<"confirmed" | "pending">("confirmed");
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -209,7 +205,6 @@ function DashboardView() {
     queryClient.invalidateQueries({ queryKey: getGetBookingSummaryQueryKey({ month }) });
   };
 
-  // Split bookings — filter old pending (>1 month old) out
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
@@ -295,11 +290,23 @@ function DashboardView() {
     );
   };
 
+  const handleConfirmBooking = (bookingId: number) => {
+    if (!confirm("Confirm this booking? This marks the seat as occupied.")) return;
+    updateBooking.mutate(
+      { id: bookingId, data: { status: "confirmed" } },
+      {
+        onSuccess: () => {
+          invalidateBookings();
+          invalidateSeats();
+        },
+      }
+    );
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
       {/* Month nav + controls */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {/* Month navigation */}
         <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
           <button
             onClick={() => setMonth(prevMonth(month))}
@@ -421,7 +428,6 @@ function DashboardView() {
                 {monthLabel(month)} — Bookings
               </h2>
             </div>
-            {/* Tabs */}
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               {(["confirmed", "pending"] as const).map((tab) => {
                 const count = tab === "confirmed" ? confirmedBookings.length : pendingBookings.length;
@@ -455,7 +461,7 @@ function DashboardView() {
             <div className="p-8 text-center text-gray-400 text-sm">
               {bookingTab === "confirmed"
                 ? "No confirmed bookings for this month."
-                : "No pending bookings. Old pending bookings are automatically cleared."}
+                : "No pending bookings."}
             </div>
           ) : (
             <div className="divide-y divide-gray-50 max-h-[450px] overflow-y-auto">
@@ -468,38 +474,28 @@ function DashboardView() {
                         <span className="text-xs text-gray-400">{b.section === "AC" ? "AC" : "Non-AC"}</span>
                         <Badge
                           variant={b.status === "confirmed" ? "default" : "secondary"}
-                          className="text-xs px-1.5 py-0"
+                          className={`text-xs px-1.5 py-0 ${b.status === "pending" ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" : ""}`}
                         >
-                          {b.status === "confirmed" ? "Paid ✓" : "Pending"}
+                          {b.status === "confirmed" ? "Confirmed ✓" : "Pending"}
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-600 font-medium">{b.customerName}</p>
                       <p className="text-xs text-gray-400">{b.customerPhone}{b.customerEmail ? ` · ${b.customerEmail}` : ""}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {b.durationMonths > 1
-                          ? `${b.durationMonths} mo: ${monthLabel(b.month)} → ${monthLabel(b.endMonth)}`
-                          : monthLabel(b.month)}
-                        {b.startDay && b.startDay > 1 ? ` (from ${b.startDay}th)` : ""}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">{bookingPeriodLabel(b)}</p>
                       {b.paymentDate && (
-                        <p className="text-xs text-green-600 mt-0.5">Paid: {formatDate(b.paymentDate)}</p>
-                      )}
-                      {b.paymentSessionId?.startsWith("pay_") && (
-                        <a
-                          href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono"
-                        >
-                          {b.paymentSessionId}
-                          <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
+                        <p className="text-xs text-green-600 mt-0.5">Confirmed: {formatDate(b.paymentDate)}</p>
                       )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-base font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
+                      {b.status === "pending" && (
+                        <button
+                          className="text-xs text-green-600 hover:text-green-800 mt-1 transition-colors block font-semibold"
+                          onClick={() => handleConfirmBooking(b.id)}
+                        >
+                          ✓ Confirm
+                        </button>
+                      )}
                       {b.status === "confirmed" && (
                         <button
                           className="text-xs text-red-400 hover:text-red-600 mt-1 transition-colors"
@@ -520,14 +516,13 @@ function DashboardView() {
         <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-700 text-sm">Offline Seat Bookings</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Toggle seats booked directly at the desk (counted in stats above)</p>
+            <p className="text-xs text-gray-400 mt-0.5">Toggle seats booked directly at the desk</p>
           </div>
           <div className="divide-y divide-gray-50 max-h-[480px] overflow-y-auto">
             {seats.map((seat) => {
               const isOnlineBooked = seat.bookedForMonth === true && !seat.isOfflineBooked;
               const showForm = expandedOfflineId === seat.id;
 
-              // Compute offline price for display
               let offlineAmtDisplay = "";
               if (seat.isOfflineBooked && seat.offlineBookingFrom && seat.offlineBookingUntil && pricing) {
                 const n = countMonthsInRange(seat.offlineBookingFrom, seat.offlineBookingUntil);
@@ -551,7 +546,7 @@ function DashboardView() {
                         <p className="text-xs text-gray-500 mt-0.5">
                           {seat.offlineBookingName}
                           {seat.offlineBookingFrom && seat.offlineBookingUntil
-                            ? ` · ${monthLabel(seat.offlineBookingFrom)} → ${monthLabel(seat.offlineBookingUntil)}`
+                            ? ` · ${formatDate(seat.offlineBookingFrom)} → ${formatDate(seat.offlineBookingUntil)}`
                             : ""}
                           {offlineAmtDisplay ? ` · ${offlineAmtDisplay}` : ""}
                         </p>
@@ -640,7 +635,6 @@ function ManagementListView() {
   const activeTab = ROOM_TABS.find((t) => t.room === activeRoom)!;
   const activeSeats = activeTab.seats;
 
-  // Upcoming vacancies — seats with any booking ending within the next 30 days
   const now = new Date();
   const soon = addDays(now, 30);
 
@@ -656,17 +650,16 @@ function ManagementListView() {
   activeSeats.forEach((seat) => {
     const seatBookings = bookingsBySeat.get(seat.id) ?? [];
     seatBookings.forEach((b) => {
-      // endMonth is "YYYY-MM"; last day of that month
-      const [y, m] = b.endMonth.split("-").map(Number);
-      const endDate = new Date(y, m, 0); // last day
+      const endDateStr = b.endDate ?? b.endMonth;
+      let endDate: Date;
+      if (b.endDate) {
+        endDate = new Date(b.endDate);
+      } else {
+        const [y, m] = b.endMonth.split("-").map(Number);
+        endDate = new Date(y, m, 0);
+      }
       if (endDate >= now && endDate <= soon) {
-        upcomingVacancies.push({
-          seat,
-          endDateStr: b.endMonth,
-          endDate,
-          holderName: b.customerName,
-          type: "online",
-        });
+        upcomingVacancies.push({ seat, endDateStr, endDate, holderName: b.customerName, type: "online" });
       }
     });
     if (seat.isOfflineBooked && seat.offlineBookingUntil) {
@@ -725,31 +718,12 @@ function ManagementListView() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-xs font-semibold text-gray-700">{b.customerName}</p>
                       <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-blue-600">Online</Badge>
-                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Paid</Badge>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Confirmed</Badge>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">{b.customerPhone}</p>
-                    <p className="text-xs text-blue-600 mt-0.5">
-                      {b.durationMonths > 1
-                        ? `${monthLabel(b.month)} → ${monthLabel(b.endMonth)} (${b.durationMonths} mo)`
-                        : monthLabel(b.month)}
-                      {b.startDay && b.startDay > 1 ? ` · from ${b.startDay}th` : ""}
-                    </p>
+                    <p className="text-xs text-blue-600 mt-0.5">{bookingPeriodLabel(b)}</p>
                     {b.paymentDate && (
-                      <p className="text-xs text-gray-400">Paid {formatDate(b.paymentDate)}</p>
-                    )}
-                    {b.paymentSessionId?.startsWith("pay_") && (
-                      <a
-                        href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-white border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono max-w-[160px] truncate"
-                        title={b.paymentSessionId}
-                      >
-                        {b.paymentSessionId}
-                        <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                      <p className="text-xs text-gray-400">Confirmed {formatDate(b.paymentDate)}</p>
                     )}
                   </div>
                   <div className="text-right shrink-0">
@@ -781,7 +755,7 @@ function ManagementListView() {
                     )}
                     {seat.offlineBookingFrom && seat.offlineBookingUntil && (
                       <p className="text-xs text-orange-600 mt-0.5">
-                        {dateLabel(seat.offlineBookingFrom)} → {dateLabel(seat.offlineBookingUntil)}
+                        {formatDate(seat.offlineBookingFrom)} → {formatDate(seat.offlineBookingUntil)}
                       </p>
                     )}
                   </div>
@@ -875,7 +849,7 @@ function ManagementListView() {
                       {v.type === "online" ? "Online" : "Offline"}
                     </Badge>
                     <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
-                      Ends {dateLabel(v.endDateStr)}
+                      Ends {formatDate(v.endDateStr)}
                     </p>
                   </div>
                 </div>

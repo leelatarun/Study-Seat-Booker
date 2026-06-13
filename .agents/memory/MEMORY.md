@@ -1,0 +1,1 @@
+- [UPI payment flow + date-range booking](upi-date-booking.md) — replaced Razorpay with UPI QR; bookings now use startDate/endDate; admin confirms manually

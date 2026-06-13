@@ -1,64 +1,31 @@
 import { useState } from "react";
-import { useParams, useLocation, useSearch } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useGetSeat, useCreateBooking, useGetPricing, getGetSeatQueryKey, getGetPricingQueryKey } from "@workspace/api-client-react";
-import { format, addMonths } from "date-fns";
+import { differenceInCalendarDays, parseISO, format, addMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const DURATION_OPTIONS = [
-  { value: 1, label: "1 Month" },
-  { value: 2, label: "2 Months" },
-  { value: 3, label: "3 Months" },
-  { value: 6, label: "6 Months" },
-];
-
-const getMonths = () => {
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth(), 1);
-  return Array.from({ length: 12 }).map((_, i) => {
-    const date = addMonths(base, i);
-    return { value: format(date, "yyyy-MM"), label: format(date, "MMMM yyyy") };
-  });
-};
-
-const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
-
-function addMonthsToYYYYMM(month: string, count: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const totalMonths = y * 12 + m - 1 + count - 1;
-  const endYear = Math.floor(totalMonths / 12);
-  const endMon = (totalMonths % 12) + 1;
-  return `${endYear}-${String(endMon).padStart(2, "0")}`;
+function todayStr(): string {
+  return new Date().toISOString().split("T")[0];
 }
 
-function monthLabel(ym: string) {
-  const [y, m] = ym.split("-");
-  return new Date(parseInt(y), parseInt(m) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+function formatDisplayDate(yyyyMmDd: string): string {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function formatDateFromMonthAndDay(ym: string, day: number): string {
-  const [y, m] = ym.split("-");
-  return new Date(parseInt(y), parseInt(m) - 1, day).toLocaleDateString("en-IN", {
-    day: "numeric", month: "long", year: "numeric",
-  });
-}
-
-function addMonthsToDate(ym: string, day: number, count: number): string {
-  const endYm = addMonthsToYYYYMM(ym, count + 1);
-  const [y, m] = endYm.split("-");
-  return new Date(parseInt(y), parseInt(m) - 1, day).toLocaleDateString("en-IN", {
-    day: "numeric", month: "long", year: "numeric",
-  });
+function daysBetween(start: string, end: string): number {
+  try {
+    return Math.max(1, differenceInCalendarDays(parseISO(end), parseISO(start)) + 1);
+  } catch {
+    return 1;
+  }
 }
 
 export default function Book() {
   const { seatId } = useParams<{ seatId: string }>();
   const [, navigate] = useLocation();
-  const search = useSearch();
-  const params = new URLSearchParams(search);
-  const defaultMonth = params.get("month") ?? getMonths()[0].value;
   const id = parseInt(seatId ?? "0", 10);
 
   const { data: seat, isLoading } = useGetSeat(id, {
@@ -69,45 +36,47 @@ export default function Book() {
   });
 
   const createBooking = useCreateBooking();
-  const months = getMonths();
 
-  const today = new Date().getDate();
+  const defaultStart = todayStr();
+  const defaultEnd = format(addMonths(new Date(), 1), "yyyy-MM-dd");
 
   const [form, setForm] = useState({
-    name: params.get("name") ?? "",
-    phone: params.get("phone") ?? "",
-    email: params.get("email") ?? "",
-    month: defaultMonth,
-    duration: 1,
-    startDay: today,
+    name: "",
+    phone: "",
+    email: "",
+    startDate: defaultStart,
+    endDate: defaultEnd,
   });
   const [error, setError] = useState("");
 
-  const getPrice = (duration: number, isAc: boolean) => {
-    if (!pricing) return isAc ? 2000 : 1500;
-    if (isAc) {
-      if (duration === 2) return pricing.acPrice2m;
-      if (duration === 3) return pricing.acPrice3m;
-      if (duration === 6) return pricing.acPrice6m;
-      return pricing.acPrice1m;
-    } else {
-      if (duration === 2) return pricing.nonAcPrice2m;
-      if (duration === 3) return pricing.nonAcPrice3m;
-      if (duration === 6) return pricing.nonAcPrice6m;
-      return pricing.nonAcPrice1m;
-    }
-  };
+  const monthlyRate = (() => {
+    if (!pricing) return seat?.isAC ? 2000 : 1500;
+    return seat?.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m;
+  })();
 
-  const isAc = seat?.isAC ?? false;
-  const selectedPrice = getPrice(form.duration, isAc);
-  const endMonth = addMonthsToYYYYMM(form.month, form.duration);
-  const startDateStr = formatDateFromMonthAndDay(form.month, form.startDay);
-  const validUntilStr = addMonthsToDate(form.month, form.startDay, form.duration);
+  const days = form.startDate && form.endDate && form.endDate >= form.startDate
+    ? daysBetween(form.startDate, form.endDate)
+    : 0;
+
+  const totalPrice = days > 0 ? Math.round((monthlyRate / 30) * days) : 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     if (!seat) return;
+    if (!form.startDate || !form.endDate) {
+      setError("Please select both start and end dates.");
+      return;
+    }
+    if (form.endDate < form.startDate) {
+      setError("End date must be on or after start date.");
+      return;
+    }
+    if (form.startDate < todayStr()) {
+      setError("Start date cannot be in the past.");
+      return;
+    }
 
     createBooking.mutate(
       {
@@ -116,9 +85,8 @@ export default function Book() {
           customerName: form.name,
           customerPhone: form.phone,
           customerEmail: form.email || undefined,
-          month: form.month,
-          durationMonths: form.duration,
-          startDay: form.startDay,
+          startDate: form.startDate,
+          endDate: form.endDate,
         },
       },
       {
@@ -175,81 +143,67 @@ export default function Book() {
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
-                <p className="text-2xl font-bold text-primary">₹{selectedPrice.toLocaleString("en-IN")}</p>
-                <p className="text-xs text-gray-400">for {form.duration} month{form.duration > 1 ? "s" : ""}</p>
+                <p className="text-2xl font-bold text-primary">
+                  {days > 0 ? `₹${totalPrice.toLocaleString("en-IN")}` : "—"}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {days > 0 ? `${days} day${days !== 1 ? "s" : ""}` : "select dates"}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Duration picker with pricing tiles */}
-          <div className="p-6 border-b border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Choose Duration</p>
-            <div className="grid grid-cols-4 gap-2">
-              {DURATION_OPTIONS.map((opt) => {
-                const p = getPrice(opt.value, isAc);
-                const active = form.duration === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, duration: opt.value })}
-                    className={`rounded-xl border-2 p-3 text-center transition-all ${
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-gray-200 hover:border-gray-300 bg-white"
-                    }`}
-                  >
-                    <p className={`text-xs font-semibold mb-1 ${active ? "text-primary" : "text-gray-500"}`}>
-                      {opt.label}
-                    </p>
-                    <p className={`text-sm font-bold ${active ? "text-primary" : "text-gray-700"}`}>
-                      ₹{p.toLocaleString("en-IN")}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Pricing info */}
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <p className="text-xs text-gray-500">
+              ₹{monthlyRate.toLocaleString("en-IN")}/month · charged daily (₹{Math.round(monthlyRate / 30)}/day)
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* Month + Start Day */}
+            {/* Date range picker */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Start Month</Label>
-                <Select value={form.month} onValueChange={(v) => setForm({ ...form, month: v })}>
-                  <SelectTrigger className="bg-gray-50 border-gray-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="startDate">Start Date <span className="text-red-400">*</span></Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={form.startDate}
+                  min={todayStr()}
+                  onChange={(e) => {
+                    const newStart = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      startDate: newStart,
+                      endDate: f.endDate < newStart ? newStart : f.endDate,
+                    }));
+                  }}
+                  required
+                  className="bg-gray-50 border-gray-200"
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Start Day</Label>
-                <Select
-                  value={String(form.startDay)}
-                  onValueChange={(v) => setForm({ ...form, startDay: parseInt(v) })}
-                >
-                  <SelectTrigger className="bg-gray-50 border-gray-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAY_OPTIONS.map((d) => (
-                      <SelectItem key={d} value={String(d)}>{d}{d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th"}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="endDate">End Date <span className="text-red-400">*</span></Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={form.endDate}
+                  min={form.startDate || todayStr()}
+                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                  required
+                  className="bg-gray-50 border-gray-200"
+                />
               </div>
             </div>
 
-            {/* Validity period */}
-            <div className="bg-green-50 border border-green-100 rounded-lg px-4 py-3 text-xs text-green-700">
-              <span className="font-medium">Valid:</span>{" "}
-              {startDateStr} → {validUntilStr}
-            </div>
+            {/* Validity summary */}
+            {days > 0 && (
+              <div className="bg-green-50 border border-green-100 rounded-lg px-4 py-3 text-xs text-green-700">
+                <span className="font-medium">Period:</span>{" "}
+                {formatDisplayDate(form.startDate)} → {formatDisplayDate(form.endDate)}
+                {" "}<span className="text-green-500">({days} day{days !== 1 ? "s" : ""})</span>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="name">Full Name <span className="text-red-400">*</span></Label>
@@ -301,9 +255,13 @@ export default function Book() {
             <Button
               type="submit"
               className="w-full h-11 text-base font-semibold"
-              disabled={createBooking.isPending}
+              disabled={createBooking.isPending || days <= 0}
             >
-              {createBooking.isPending ? "Processing..." : `Pay ₹${selectedPrice.toLocaleString("en-IN")} →`}
+              {createBooking.isPending
+                ? "Submitting..."
+                : days > 0
+                ? `Proceed to Pay ₹${totalPrice.toLocaleString("en-IN")} →`
+                : "Select dates to continue"}
             </Button>
           </form>
         </div>

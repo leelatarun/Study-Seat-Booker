@@ -21,12 +21,12 @@ export interface Seat {
   /** @nullable */
   offlineBookingPhone?: string | null;
   /**
-     * YYYY-MM start month for offline booking
+     * YYYY-MM-DD start date for offline booking
      * @nullable
      */
   offlineBookingFrom?: string | null;
   /**
-     * YYYY-MM end month for offline booking
+     * YYYY-MM-DD end date for offline booking
      * @nullable
      */
   offlineBookingUntil?: string | null;

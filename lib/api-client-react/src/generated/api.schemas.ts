@@ -24,12 +24,12 @@ export interface Seat {
   /** @nullable */
   offlineBookingPhone?: string | null;
   /**
-     * YYYY-MM start month for offline booking
+     * YYYY-MM-DD start date for offline booking
      * @nullable
      */
   offlineBookingFrom?: string | null;
   /**
-     * YYYY-MM end month for offline booking
+     * YYYY-MM-DD end date for offline booking
      * @nullable
      */
   offlineBookingUntil?: string | null;
@@ -63,19 +63,25 @@ export interface Booking {
   customerPhone: string;
   /** @nullable */
   customerEmail?: string | null;
-  /** YYYY-MM start month */
+  /**
+     * YYYY-MM-DD booking start date
+     * @nullable
+     */
+  startDate?: string | null;
+  /**
+     * YYYY-MM-DD booking end date (inclusive)
+     * @nullable
+     */
+  endDate?: string | null;
+  /** YYYY-MM start month (derived from startDate) */
   month: string;
-  /** YYYY-MM last month of booking */
+  /** YYYY-MM last month of booking (derived from endDate) */
   endMonth: string;
-  /** 1, 2, 3, or 6 */
   durationMonths: number;
   amount: number;
   /** pending | confirmed | cancelled */
   status: string;
-  /**
-     * Day of month (1-31) when booking starts
-     * @nullable
-     */
+  /** @nullable */
   startDay?: number | null;
   /**
      * YYYY-MM-DD when payment was confirmed
@@ -94,12 +100,10 @@ export interface BookingInput {
   /** @minLength 10 */
   customerPhone: string;
   customerEmail?: string;
-  /** YYYY-MM start month */
-  month: string;
-  /** 1, 2, 3, or 6 — defaults to 1 */
-  durationMonths?: number;
-  /** Day of month (1-31) when booking starts — defaults to 1 */
-  startDay?: number;
+  /** Booking start date YYYY-MM-DD (must not be in the past) */
+  startDate: string;
+  /** Booking end date YYYY-MM-DD (inclusive, must be >= startDate) */
+  endDate: string;
 }
 
 export interface BookingUpdate {
@@ -126,34 +130,6 @@ export interface PaymentSession {
   bookingId: number;
   amount: number;
   expiresAt: string;
-}
-
-export interface PaymentConfirm {
-  sessionId: string;
-  bookingId: number;
-  cardNumber?: string;
-  cardName?: string;
-  expiry?: string;
-  cvv?: string;
-}
-
-export interface RazorpayOrderRequest {
-  bookingId: number;
-}
-
-export interface RazorpayOrderResponse {
-  orderId: string;
-  /** Amount in paise */
-  amount: number;
-  currency: string;
-  keyId: string;
-}
-
-export interface RazorpayVerifyRequest {
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
-  razorpaySignature: string;
-  bookingId: number;
 }
 
 export interface Pricing {

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, lte, gte } from "drizzle-orm";
+import { eq, and, lte, gte, isNull, isNotNull, or } from "drizzle-orm";
 import { db, bookingsTable, seatsTable, pricingTable } from "@workspace/db";
 import {
   ListBookingsQueryParams,
@@ -12,36 +12,32 @@ import {
 
 const router: IRouter = Router();
 
-function calcEndMonth(startMonth: string, durationMonths: number): string {
-  const [year, m] = startMonth.split("-").map(Number);
-  const totalMonths = year * 12 + m - 1 + (durationMonths - 1);
-  const endYear = Math.floor(totalMonths / 12);
-  const endMon = (totalMonths % 12) + 1;
-  return `${endYear}-${String(endMon).padStart(2, "0")}`;
-}
-
-function getPriceForDuration(
-  pricing: typeof pricingTable.$inferSelect,
-  isAc: boolean,
-  duration: number
-): number {
-  if (isAc) {
-    if (duration === 2) return pricing.acPrice2m;
-    if (duration === 3) return pricing.acPrice3m;
-    if (duration === 6) return pricing.acPrice6m;
-    return pricing.acPrice1m;
-  } else {
-    if (duration === 2) return pricing.nonAcPrice2m;
-    if (duration === 3) return pricing.nonAcPrice3m;
-    if (duration === 6) return pricing.nonAcPrice6m;
-    return pricing.nonAcPrice1m;
-  }
-}
-
 function getSectionForSeat(seat: typeof seatsTable.$inferSelect, room2IsAc: boolean): { section: string; isAC: boolean } {
   if (seat.room === 1) return { section: "AC", isAC: true };
   if (seat.room === 2) return room2IsAc ? { section: "AC", isAC: true } : { section: "NON_AC", isAC: false };
   return { section: "NON_AC", isAC: false };
+}
+
+function dateToYYYYMM(dateStr: string): string {
+  return dateStr.substring(0, 7);
+}
+
+function daysBetween(startDate: string, endDate: string): number {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function monthsBetweenYYYYMM(startMonth: string, endMonth: string): number {
+  const [sy, sm] = startMonth.split("-").map(Number);
+  const [ey, em] = endMonth.split("-").map(Number);
+  return (ey - sy) * 12 + (em - sm) + 1;
+}
+
+function lastDayOfMonth(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${yyyyMm}-${String(lastDay).padStart(2, "0")}`;
 }
 
 function formatBooking(
@@ -58,6 +54,8 @@ function formatBooking(
     customerName: booking.customerName,
     customerPhone: booking.customerPhone,
     customerEmail: booking.customerEmail ?? null,
+    startDate: booking.startDate ?? null,
+    endDate: booking.endDate ?? null,
     month: booking.month,
     endMonth: booking.endMonth,
     durationMonths: booking.durationMonths,
@@ -83,26 +81,36 @@ router.get("/bookings/summary", async (req, res): Promise<void> => {
   const pricing = pricingRow[0];
   const room2IsAc = pricing?.room2IsAc ?? false;
 
-  // Online confirmed bookings for this month
+  const monthFirstDay = `${month}-01`;
+  const monthLastDay = lastDayOfMonth(month);
+
   const bookingsForMonth = await db
     .select()
     .from(bookingsTable)
     .where(
       and(
-        lte(bookingsTable.month, month),
-        gte(bookingsTable.endMonth, month),
-        eq(bookingsTable.status, "confirmed")
+        eq(bookingsTable.status, "confirmed"),
+        or(
+          and(
+            isNotNull(bookingsTable.startDate),
+            lte(bookingsTable.startDate, monthLastDay),
+            gte(bookingsTable.endDate, monthFirstDay)
+          ),
+          and(
+            isNull(bookingsTable.startDate),
+            lte(bookingsTable.month, month),
+            gte(bookingsTable.endMonth, month)
+          )
+        )
       )
     );
 
   const bookedSeatIds = new Set(bookingsForMonth.map((b) => b.seatId));
 
-  // Offline-booked seats active for this month
   const offlineSeats = allSeats.filter((s) => {
     if (!s.isOfflineBooked) return false;
-    // If no dates set, count it as active
     if (!s.offlineBookingFrom || !s.offlineBookingUntil) return true;
-    return s.offlineBookingFrom <= month && s.offlineBookingUntil >= month;
+    return s.offlineBookingFrom <= monthLastDay && s.offlineBookingUntil >= monthFirstDay;
   });
 
   const totalBooked = bookedSeatIds.size + offlineSeats.filter((s) => !bookedSeatIds.has(s.id)).length;
@@ -112,10 +120,17 @@ router.get("/bookings/summary", async (req, res): Promise<void> => {
   const acBooked = acSeats.filter((s) => bookedSeatIds.has(s.id)).length;
   const nonAcBooked = nonAcSeats.filter((s) => bookedSeatIds.has(s.id)).length;
 
-  // Online revenue (per-month share of multi-month bookings)
-  const onlineRevenue = bookingsForMonth.reduce((sum, b) => sum + Number(b.amount) / b.durationMonths, 0);
+  const onlineRevenue = bookingsForMonth.reduce((sum, b) => {
+    if (b.startDate && b.endDate) {
+      const totalDays = daysBetween(b.startDate, b.endDate);
+      const overlapStart = b.startDate > monthFirstDay ? b.startDate : monthFirstDay;
+      const overlapEnd = b.endDate < monthLastDay ? b.endDate : monthLastDay;
+      const monthDays = daysBetween(overlapStart, overlapEnd);
+      return sum + (Number(b.amount) * monthDays) / totalDays;
+    }
+    return sum + Number(b.amount) / b.durationMonths;
+  }, 0);
 
-  // Offline revenue (1 month of each offline seat's price)
   const offlineRevenue = offlineSeats
     .filter((s) => !bookedSeatIds.has(s.id))
     .reduce((sum, s) => {
@@ -145,13 +160,24 @@ router.get("/bookings", async (req, res): Promise<void> => {
 
   let bookings;
   if (month) {
+    const monthFirstDay = `${month}-01`;
+    const monthLastDay = lastDayOfMonth(month);
+
     bookings = await db
       .select()
       .from(bookingsTable)
       .where(
-        and(
-          lte(bookingsTable.month, month),
-          gte(bookingsTable.endMonth, month)
+        or(
+          and(
+            isNotNull(bookingsTable.startDate),
+            lte(bookingsTable.startDate, monthLastDay),
+            gte(bookingsTable.endDate, monthFirstDay)
+          ),
+          and(
+            isNull(bookingsTable.startDate),
+            lte(bookingsTable.month, month),
+            gte(bookingsTable.endMonth, month)
+          )
         )
       )
       .orderBy(bookingsTable.createdAt);
@@ -169,32 +195,53 @@ router.post("/bookings", async (req, res): Promise<void> => {
     return;
   }
 
-  const seat = await db.select().from(seatsTable).where(eq(seatsTable.id, body.data.seatId)).limit(1);
+  const { seatId, customerName, customerPhone, customerEmail, startDate, endDate } = body.data;
+
+  const today = new Date().toISOString().split("T")[0];
+  if (startDate < today) {
+    res.status(400).json({ error: "Start date cannot be in the past" });
+    return;
+  }
+  if (endDate < startDate) {
+    res.status(400).json({ error: "End date must be on or after start date" });
+    return;
+  }
+
+  const seat = await db.select().from(seatsTable).where(eq(seatsTable.id, seatId)).limit(1);
   if (!seat[0]) {
     res.status(400).json({ error: "Seat not found" });
     return;
   }
 
   if (seat[0].isOfflineBooked) {
-    res.status(400).json({ error: "This seat has been booked offline. Please contact the admin." });
+    res.status(400).json({ error: "This seat is currently unavailable. Please contact the admin." });
     return;
   }
 
-  const durationMonths = body.data.durationMonths ?? 1;
-  const startMonth = body.data.month;
-  const endMonth = calcEndMonth(startMonth, durationMonths);
-  const startDay = body.data.startDay ?? 1;
+  const startMonth = dateToYYYYMM(startDate);
+  const endMonth = dateToYYYYMM(endDate);
+  const durationMonths = monthsBetweenYYYYMM(startMonth, endMonth);
+  const startDay = parseInt(startDate.split("-")[2], 10);
 
-  // Check for any overlapping confirmed booking
   const existing = await db
     .select()
     .from(bookingsTable)
     .where(
       and(
-        eq(bookingsTable.seatId, body.data.seatId),
+        eq(bookingsTable.seatId, seatId),
         eq(bookingsTable.status, "confirmed"),
-        lte(bookingsTable.month, endMonth),
-        gte(bookingsTable.endMonth, startMonth)
+        or(
+          and(
+            isNotNull(bookingsTable.startDate),
+            lte(bookingsTable.startDate, endDate),
+            gte(bookingsTable.endDate, startDate)
+          ),
+          and(
+            isNull(bookingsTable.startDate),
+            lte(bookingsTable.month, endMonth),
+            gte(bookingsTable.endMonth, startMonth)
+          )
+        )
       )
     )
     .limit(1);
@@ -208,18 +255,22 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const pricing = pricingRow[0];
   const room2IsAc = pricing?.room2IsAc ?? false;
   const effective = getSectionForSeat(seat[0], room2IsAc);
-
-  const price = pricing
-    ? getPriceForDuration(pricing, effective.isAC, durationMonths)
+  const monthlyRate = pricing
+    ? (effective.isAC ? pricing.acPrice1m : pricing.nonAcPrice1m)
     : (effective.isAC ? 2000 : 1500);
+
+  const days = daysBetween(startDate, endDate);
+  const price = Math.round((monthlyRate / 30) * days);
 
   const [booking] = await db
     .insert(bookingsTable)
     .values({
-      seatId: body.data.seatId,
-      customerName: body.data.customerName,
-      customerPhone: body.data.customerPhone,
-      customerEmail: body.data.customerEmail ?? null,
+      seatId,
+      customerName,
+      customerPhone,
+      customerEmail: customerEmail ?? null,
+      startDate,
+      endDate,
       month: startMonth,
       endMonth,
       durationMonths,
@@ -269,9 +320,17 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const setValues: Partial<typeof bookingsTable.$inferInsert> = {
+    status: body.data.status,
+  };
+
+  if (body.data.status === "confirmed") {
+    setValues.paymentDate = new Date().toISOString().split("T")[0];
+  }
+
   const [updated] = await db
     .update(bookingsTable)
-    .set({ status: body.data.status })
+    .set(setValues)
     .where(eq(bookingsTable.id, params.data.id))
     .returning();
 
