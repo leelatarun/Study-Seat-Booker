@@ -16,38 +16,45 @@ function WhatsAppIcon({ className }: { className?: string }) {
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] flex flex-col font-sans selection:bg-primary/30">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-lg tracking-tight">Lucky Reading Room</span>
-          </Link>
-          <nav className="flex items-center gap-4 text-sm font-medium">
-            <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">Home</Link>
-            <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">Admin</Link>
-            {/* Contact actions */}
+      <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        {/* Dedicated contact strip — always visible on all screen sizes */}
+        <div className="bg-primary/90 text-white text-xs">
+          <div className="container mx-auto px-4 md:px-8 h-8 flex items-center justify-end gap-4">
             <a
               href={PHONE_HREF}
-              className="hidden sm:flex items-center gap-1.5 text-gray-600 hover:text-primary transition-colors"
-              title="Call us"
+              className="flex items-center gap-1.5 hover:text-white/80 transition-colors font-semibold"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
-              <span className="text-xs font-semibold">{PHONE}</span>
+              {PHONE}
             </a>
             <a
               href={WHATSAPP_HREF}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] transition-colors"
-              title="Chat on WhatsApp"
+              className="flex items-center gap-1.5 hover:text-white/80 transition-colors font-semibold"
             >
-              <WhatsAppIcon className="w-4 h-4" />
+              <WhatsAppIcon className="w-3.5 h-3.5 shrink-0" />
+              WhatsApp
             </a>
-          </nav>
+          </div>
+        </div>
+
+        {/* Main nav bar */}
+        <div className="border-b border-border/40">
+          <div className="container mx-auto px-4 md:px-8 h-14 flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+              <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-lg tracking-tight">Lucky Reading Room</span>
+            </Link>
+            <nav className="flex items-center gap-5 text-sm font-medium">
+              <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">Home</Link>
+              <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">Admin</Link>
+            </nav>
+          </div>
         </div>
       </header>
 

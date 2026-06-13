@@ -227,22 +227,24 @@ export default function Home() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          {/* Photo grid — left half */}
+          {/* Photo grid — left half, all 7 photos, scrollable */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Photo Gallery</p>
-            <div className="grid grid-cols-2 gap-2">
-              {GALLERY_PHOTOS.slice(0, 6).map((src, i) => (
-                <div
-                  key={i}
-                  className={`overflow-hidden rounded-xl bg-gray-100 ${i === 0 ? "col-span-2 h-52" : "h-32"}`}
-                >
-                  <img
-                    src={src}
-                    alt={`Lucky Reading Room ${i + 1}`}
-                    className="w-full h-full object-cover object-center hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-              ))}
+            <div className="overflow-y-auto max-h-[480px] pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+              <div className="grid grid-cols-2 gap-2">
+                {GALLERY_PHOTOS.map((src, i) => (
+                  <div
+                    key={i}
+                    className={`overflow-hidden rounded-xl bg-gray-100 ${i === 0 ? "col-span-2 h-52" : "h-36"}`}
+                  >
+                    <img
+                      src={src}
+                      alt={`Lucky Reading Room ${i + 1}`}
+                      className="w-full h-full object-cover object-center hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
