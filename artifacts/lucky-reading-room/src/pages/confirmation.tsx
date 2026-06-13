@@ -1,7 +1,7 @@
 import { useParams, useLocation } from "wouter";
 import { useGetBooking, getGetBookingQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
+import { Printer, RefreshCw } from "lucide-react";
 
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-");
@@ -21,6 +21,13 @@ function addMonthsToYYYYMM(month: string, count: number): string {
   const endYear = Math.floor(totalMonths / 12);
   const endMon = (totalMonths % 12) + 1;
   return `${endYear}-${String(endMon).padStart(2, "0")}`;
+}
+
+function nextYYYYMM(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  return `${nextY}-${String(nextM).padStart(2, "0")}`;
 }
 
 function validUntilDate(endMonth: string, day: number): string {
@@ -149,18 +156,38 @@ export default function Confirmation() {
                 Show this receipt when you arrive. Your cabin is reserved until {validUntilStr}.
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
+                {/* Renew CTA */}
                 <Button
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => window.print()}
+                  className="w-full h-11 text-base font-semibold gap-2 bg-primary hover:bg-primary/90"
+                  onClick={() => {
+                    const renewMonth = nextYYYYMM(booking.endMonth);
+                    const qs = new URLSearchParams({
+                      month: renewMonth,
+                      name: booking.customerName,
+                      phone: booking.customerPhone,
+                      ...(booking.customerEmail ? { email: booking.customerEmail } : {}),
+                    });
+                    navigate(`/book/${booking.seatId}?${qs.toString()}`);
+                  }}
                 >
-                  <Printer className="w-4 h-4" />
-                  Print Receipt
+                  <RefreshCw className="w-4 h-4" />
+                  Renew for {monthLabel(nextYYYYMM(booking.endMonth))}
                 </Button>
-                <Button className="flex-1" onClick={() => navigate("/")}>
-                  Book Another Cabin
-                </Button>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={() => window.print()}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Receipt
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => navigate("/")}>
+                    Book Another Cabin
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

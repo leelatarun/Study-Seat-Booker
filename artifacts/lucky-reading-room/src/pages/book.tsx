@@ -74,9 +74,9 @@ export default function Book() {
   const today = new Date().getDate();
 
   const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
+    name: params.get("name") ?? "",
+    phone: params.get("phone") ?? "",
+    email: params.get("email") ?? "",
     month: defaultMonth,
     duration: 1,
     startDay: today,
