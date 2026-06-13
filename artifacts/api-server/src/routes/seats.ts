@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, lte, gte, and } from "drizzle-orm";
+import { eq, lte, gte, and, or, isNull, isNotNull } from "drizzle-orm";
 import { db, seatsTable, bookingsTable, pricingTable } from "@workspace/db";
 import {
   ListSeatsQueryParams,
@@ -16,6 +16,12 @@ function computeEffectiveSection(seat: typeof seatsTable.$inferSelect, room2IsAc
   return { section: "NON_AC", isAC: false };
 }
 
+function lastDayOfMonth(yyyyMm: string): string {
+  const [y, m] = yyyyMm.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${yyyyMm}-${String(lastDay).padStart(2, "0")}`;
+}
+
 function formatSeat(
   seat: typeof seatsTable.$inferSelect,
   room2IsAc: boolean,
@@ -24,7 +30,6 @@ function formatSeat(
   extra?: { bookedForMonth?: boolean | null; bookingId?: number | null; bookedByName?: string | null }
 ) {
   const effective = computeEffectiveSection(seat, room2IsAc);
-  // Auto-expire offline bookings: once today passes offlineBookingUntil, treat seat as available
   const today = new Date().toISOString().split("T")[0];
   const effectiveOfflineBooked =
     seat.isOfflineBooked &&
@@ -49,7 +54,7 @@ function formatSeat(
 
 router.get("/seats", async (req, res): Promise<void> => {
   const query = ListSeatsQueryParams.safeParse(req.query);
-  const month = query.success ? query.data.month : undefined;
+  const params = query.success ? query.data : {};
 
   const seats = await db.select().from(seatsTable).orderBy(seatsTable.id);
   const pricingRow = await db.select().from(pricingTable).limit(1);
@@ -59,7 +64,35 @@ router.get("/seats", async (req, res): Promise<void> => {
   const nonAcPrice = pricing?.nonAcPrice1m ?? 1500;
 
   let activeBookings: Array<{ seatId: number; id: number; customerName: string }> = [];
-  if (month) {
+
+  if (params.startDate && params.endDate) {
+    // Date-range overlap query: find confirmed bookings that overlap [startDate, endDate]
+    const { startDate, endDate } = params;
+    activeBookings = await db
+      .select({ seatId: bookingsTable.seatId, id: bookingsTable.id, customerName: bookingsTable.customerName })
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.status, "confirmed"),
+          or(
+            // Booking has explicit dates: use date overlap
+            and(
+              isNotNull(bookingsTable.startDate),
+              lte(bookingsTable.startDate, endDate),
+              gte(bookingsTable.endDate, startDate)
+            ),
+            // Legacy bookings without dates: use month-overlap fallback
+            and(
+              isNull(bookingsTable.startDate),
+              lte(bookingsTable.month, endDate.substring(0, 7)),
+              gte(bookingsTable.endMonth, startDate.substring(0, 7))
+            )
+          )
+        )
+      );
+  } else if (params.month) {
+    // Legacy month-based query
+    const { month } = params;
     activeBookings = await db
       .select({ seatId: bookingsTable.seatId, id: bookingsTable.id, customerName: bookingsTable.customerName })
       .from(bookingsTable)
@@ -72,10 +105,34 @@ router.get("/seats", async (req, res): Promise<void> => {
       );
   }
 
+  const today = new Date().toISOString().split("T")[0];
+  const filterStart = params.startDate ?? null;
+  const filterEnd = params.endDate ?? null;
+
   const result = seats.map((seat) => {
-    const booking = month ? activeBookings.find((b) => b.seatId === seat.id) : undefined;
+    const booking = (params.startDate || params.month) ? activeBookings.find((b) => b.seatId === seat.id) : undefined;
+
+    // Check offline booking overlap with the requested date range
+    let offlineOverlaps = seat.isOfflineBooked;
+    if (seat.isOfflineBooked && filterStart && filterEnd) {
+      const from = seat.offlineBookingFrom;
+      const until = seat.offlineBookingUntil;
+      if (from && until) {
+        offlineOverlaps = from <= filterEnd && until >= filterStart;
+      } else if (until) {
+        offlineOverlaps = until >= filterStart;
+      } else if (from) {
+        offlineOverlaps = from <= filterEnd;
+      }
+      // Also check that booking hasn't expired
+      if (seat.offlineBookingUntil && seat.offlineBookingUntil < today) {
+        offlineOverlaps = false;
+      }
+    }
+
+    const hasDateFilter = !!(params.startDate || params.month);
     return formatSeat(seat, room2IsAc, acPrice, nonAcPrice, {
-      bookedForMonth: month ? (!!booking || seat.isOfflineBooked) : null,
+      bookedForMonth: hasDateFilter ? (!!booking || offlineOverlaps) : null,
       bookingId: booking ? booking.id : null,
       bookedByName: booking ? booking.customerName : null,
     });
@@ -109,7 +166,10 @@ router.get("/seats/:id", async (req, res): Promise<void> => {
 
 router.patch("/seats/:id", async (req, res): Promise<void> => {
   const adminToken = req.headers["x-admin-token"];
-  if (adminToken !== process.env.ADMIN_SECRET && adminToken !== "admin123") {
+  const validToken =
+    adminToken === "admin123" ||
+    (!!process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET);
+  if (!validToken) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -130,7 +190,6 @@ router.patch("/seats/:id", async (req, res): Promise<void> => {
 
   if (body.data.isOfflineBooked !== undefined) {
     setValues.isOfflineBooked = body.data.isOfflineBooked;
-    // When turning off, clear the offline booking info
     if (!body.data.isOfflineBooked) {
       setValues.offlineBookingName = null;
       setValues.offlineBookingPhone = null;

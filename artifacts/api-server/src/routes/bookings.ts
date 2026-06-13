@@ -308,6 +308,15 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/bookings/:id", async (req, res): Promise<void> => {
+  const adminToken = req.headers["x-admin-token"];
+  const validToken =
+    adminToken === "admin123" ||
+    (!!process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET);
+  if (!validToken) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const params = UpdateBookingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

@@ -40,14 +40,26 @@ paths:
     get:
       operationId: listSeats
       tags: [seats]
-      summary: List all seats with availability for a month
+      summary: List all seats with availability for a date range or month
       parameters:
         - name: month
           in: query
           required: false
           schema:
             type: string
-            description: "Month in YYYY-MM format (e.g. 2026-07)"
+            description: "Month in YYYY-MM format (legacy, e.g. 2026-07)"
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            description: "Date-range start YYYY-MM-DD — seats booked for any overlapping period are shown as occupied"
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            description: "Date-range end YYYY-MM-DD (inclusive)"
       responses:
         "200":
           description: List of seats

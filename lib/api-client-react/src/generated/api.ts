@@ -144,7 +144,7 @@ export const getListSeatsUrl = (params?: ListSeatsParams,) => {
 }
 
 /**
- * @summary List all seats with availability for a month
+ * @summary List all seats with availability for a date range or month
  */
 export const listSeats = async (params?: ListSeatsParams, options?: RequestInit): Promise<Seat[]> => {
 
@@ -191,7 +191,7 @@ export type ListSeatsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all seats with availability for a month
+ * @summary List all seats with availability for a date range or month
  */
 
 export function useListSeats<TData = Awaited<ReturnType<typeof listSeats>>, TError = ErrorType<unknown>>(

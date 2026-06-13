@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { format, addMonths } from "date-fns";
 import { HeroCarousel } from "@/components/hero-carousel";
 import { ReviewCard } from "@/components/review-card";
 import { SeatSelector } from "@/components/seat-selector";
@@ -104,13 +105,17 @@ const FACILITIES = [
 ];
 
 export default function Home() {
-  const [month, setMonth] = useState("2026-07");
+  const today = format(new Date(), "yyyy-MM-dd");
+  const oneMonthLater = format(addMonths(new Date(), 1), "yyyy-MM-dd");
+
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(oneMonthLater);
   const [reviewPage, setReviewPage] = useState(0);
   const [animating, setAnimating] = useState(false);
 
   const { data: seats = [], isLoading } = useListSeats(
-    { month },
-    { query: { queryKey: ["/api/seats", { month }] } }
+    { startDate, endDate },
+    { query: { queryKey: ["/api/seats", { startDate, endDate }] } }
   );
 
   const goToPage = useCallback((next: number) => {
@@ -212,8 +217,9 @@ export default function Home() {
       <section id="book" className="container mx-auto">
         <SeatSelector
           seats={seats}
-          month={month}
-          onMonthChange={setMonth}
+          startDate={startDate}
+          endDate={endDate}
+          onDateChange={(s, e) => { setStartDate(s); setEndDate(e); }}
           isLoading={isLoading}
         />
       </section>
@@ -227,7 +233,6 @@ export default function Home() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          {/* Photo grid — left half, all 7 photos, scrollable */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Photo Gallery</p>
             <div className="overflow-y-auto max-h-[480px] pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
@@ -248,7 +253,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Map — right half */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Our Location</p>
             <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm h-full min-h-[360px] flex flex-col">

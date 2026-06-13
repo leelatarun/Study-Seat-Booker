@@ -11,8 +11,12 @@ function todayStr(): string {
 }
 
 function formatDisplayDate(yyyyMmDd: string): string {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  try {
+    const [y, m, d] = yyyyMmDd.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  } catch {
+    return yyyyMmDd;
+  }
 }
 
 function daysBetween(start: string, end: string): number {
@@ -21,6 +25,20 @@ function daysBetween(start: string, end: string): number {
   } catch {
     return 1;
   }
+}
+
+// Read pre-filled dates from URL search params (set by seat-selector)
+function getUrlDates(): { startDate: string; endDate: string; name: string; phone: string; email: string } {
+  const sp = new URLSearchParams(window.location.search);
+  const today = todayStr();
+  const nextMonth = format(addMonths(new Date(), 1), "yyyy-MM-dd");
+  return {
+    startDate: sp.get("startDate") || today,
+    endDate: sp.get("endDate") || nextMonth,
+    name: sp.get("name") || "",
+    phone: sp.get("phone") || "",
+    email: sp.get("email") || "",
+  };
 }
 
 export default function Book() {
@@ -37,15 +55,13 @@ export default function Book() {
 
   const createBooking = useCreateBooking();
 
-  const defaultStart = todayStr();
-  const defaultEnd = format(addMonths(new Date(), 1), "yyyy-MM-dd");
-
+  const prefill = getUrlDates();
   const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    startDate: defaultStart,
-    endDate: defaultEnd,
+    name: prefill.name,
+    phone: prefill.phone,
+    email: prefill.email,
+    startDate: prefill.startDate,
+    endDate: prefill.endDate,
   });
   const [error, setError] = useState("");
 

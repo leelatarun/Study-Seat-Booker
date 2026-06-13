@@ -18,10 +18,12 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary List all seats with availability for a month
+ * @summary List all seats with availability for a date range or month
  */
 export const ListSeatsQueryParams = zod.object({
-  "month": zod.coerce.string().optional()
+  "month": zod.coerce.string().optional(),
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
 })
 
 export const ListSeatsResponseItem = zod.object({

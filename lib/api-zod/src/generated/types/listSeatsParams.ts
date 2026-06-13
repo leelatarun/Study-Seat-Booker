@@ -8,7 +8,15 @@
 
 export type ListSeatsParams = {
 /**
- * Month in YYYY-MM format (e.g. 2026-07)
+ * Month in YYYY-MM format (legacy, e.g. 2026-07)
  */
 month?: string;
+/**
+ * Date-range start YYYY-MM-DD — seats booked for any overlapping period are shown as occupied
+ */
+startDate?: string;
+/**
+ * Date-range end YYYY-MM-DD (inclusive)
+ */
+endDate?: string;
 };
