@@ -41,17 +41,15 @@ export default function Payment() {
   const [scriptReady, setScriptReady] = useState(false);
   const initiated = useRef(false);
 
-  // Pre-load Razorpay script
   useEffect(() => {
     loadRazorpayScript().then(setScriptReady);
   }, []);
 
-  // Auto-create internal session (kept for backwards compat)
   useEffect(() => {
     if (booking && !initiated.current) {
       initiated.current = true;
       initiatePayment.mutate({ data: { bookingId: booking.id } }, {
-        onError: () => setError("Could not start payment session. Please refresh."),
+        onError: () => {},
       });
     }
   }, [booking]);
@@ -62,7 +60,6 @@ export default function Payment() {
     setPaying(true);
 
     try {
-      // 1. Create Razorpay order on our backend
       const res = await fetch("/api/payments/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,7 +71,6 @@ export default function Payment() {
       }
       const { orderId, amount, currency, keyId } = await res.json();
 
-      // 2. Open Razorpay modal
       await new Promise<void>((resolve, reject) => {
         const options = {
           key: keyId,
@@ -89,6 +85,27 @@ export default function Payment() {
             email: booking.customerEmail ?? "",
           },
           theme: { color: "#16a34a" },
+          // Explicitly surface UPI, Credit Card, Debit Card
+          config: {
+            display: {
+              blocks: {
+                upi: {
+                  name: "UPI",
+                  instruments: [{ method: "upi" }],
+                },
+                credit: {
+                  name: "Credit Card",
+                  instruments: [{ method: "card", types: ["credit"] }],
+                },
+                debit: {
+                  name: "Debit Card",
+                  instruments: [{ method: "card", types: ["debit"] }],
+                },
+              },
+              sequence: ["block.upi", "block.credit", "block.debit"],
+              preferences: { show_default_blocks: true },
+            },
+          },
           modal: {
             ondismiss: () => reject(new Error("cancelled")),
           },
@@ -98,7 +115,6 @@ export default function Payment() {
             razorpay_signature: string;
           }) => {
             try {
-              // 3. Verify signature on backend and confirm booking
               const vRes = await fetch("/api/payments/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -128,7 +144,6 @@ export default function Payment() {
         rzp.open();
       });
 
-      // Success!
       navigate(`/confirmation/${booking.id}`);
     } catch (err: any) {
       if (err?.message === "cancelled") {
@@ -193,22 +208,47 @@ export default function Payment() {
           </div>
 
           <div className="p-6 space-y-5">
-            {/* Razorpay branding */}
-            <div className="flex flex-col items-center gap-3 py-4">
-              <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-100 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#3395FF" opacity="0.9"/>
-                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#3395FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+            {/* Payment method icons */}
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div className="flex items-center gap-3">
+                {/* UPI */}
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
+                    <svg viewBox="0 0 48 48" className="w-7 h-7" fill="none">
+                      <rect width="48" height="48" rx="8" fill="#6C47FF" opacity="0.1"/>
+                      <path d="M24 8L14 24l10 16 10-16-10-16z" fill="#6C47FF"/>
+                      <path d="M24 8l10 16H14L24 8z" fill="#9F7FFF" opacity="0.6"/>
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium">UPI</span>
+                </div>
+                {/* Credit Card */}
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                      <rect x="1" y="4" width="22" height="16" rx="3" stroke="#3B82F6" strokeWidth="1.5"/>
+                      <path d="M1 10h22" stroke="#3B82F6" strokeWidth="1.5"/>
+                      <rect x="4" y="14" width="4" height="2" rx="0.5" fill="#3B82F6"/>
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium">Credit</span>
+                </div>
+                {/* Debit Card */}
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                      <rect x="1" y="4" width="22" height="16" rx="3" stroke="#16a34a" strokeWidth="1.5"/>
+                      <path d="M1 10h22" stroke="#16a34a" strokeWidth="1.5"/>
+                      <rect x="4" y="14" width="4" height="2" rx="0.5" fill="#16a34a"/>
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium">Debit</span>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="font-semibold text-gray-800">Pay with Razorpay</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  UPI · Cards · Net Banking · Wallets
-                </p>
-              </div>
+              <p className="text-xs text-gray-400">Powered by Razorpay</p>
             </div>
 
+            {/* Booking summary */}
             <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-600 space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-400">Booking for</span>
@@ -252,7 +292,7 @@ export default function Payment() {
                   Opening Payment...
                 </>
               ) : (
-                <>Pay ₹{Number(booking.amount).toLocaleString("en-IN")} via Razorpay</>
+                <>Pay ₹{Number(booking.amount).toLocaleString("en-IN")} →</>
               )}
             </Button>
 

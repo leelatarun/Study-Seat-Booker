@@ -465,6 +465,19 @@ function DashboardView() {
                       {b.paymentDate && (
                         <p className="text-xs text-green-600 mt-0.5">Paid: {formatDate(b.paymentDate)}</p>
                       )}
+                      {b.paymentSessionId?.startsWith("pay_") && (
+                        <a
+                          href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono"
+                        >
+                          {b.paymentSessionId}
+                          <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-base font-bold text-primary">₹{Number(b.amount).toLocaleString("en-IN")}</p>
@@ -663,6 +676,20 @@ function ManagementListView() {
                               </p>
                               {b.paymentDate && (
                                 <p className="text-xs text-gray-400">Paid {formatDate(b.paymentDate)}</p>
+                              )}
+                              {b.paymentSessionId?.startsWith("pay_") && (
+                                <a
+                                  href={`https://dashboard.razorpay.com/app/payments/${b.paymentSessionId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded px-1.5 py-0.5 transition-colors font-mono max-w-[140px] truncate"
+                                  title={b.paymentSessionId}
+                                >
+                                  {b.paymentSessionId}
+                                  <svg className="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </a>
                               )}
                             </div>
                             <div className="text-right shrink-0">
