@@ -6,6 +6,8 @@ const router: IRouter = Router();
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
+export const validTokens = new Set<string>();
+
 router.post("/admin/login", async (req, res): Promise<void> => {
   const body = AdminLoginBody.safeParse(req.body);
   if (!body.success) {
@@ -19,6 +21,7 @@ router.post("/admin/login", async (req, res): Promise<void> => {
   }
 
   const token = crypto.randomUUID();
+  validTokens.add(token);
   res.json({ success: true, token });
 });
 
