@@ -51,7 +51,7 @@ function countMonthsInRange(from: string, until: string): number {
     };
     const f = parseYM(from);
     const u = parseYM(until);
-    return Math.max(1, (u.year - f.year) * 12 + (u.month - f.month) + 1);
+    return Math.max(1, (u.year - f.year) * 12 + (u.month - f.month));
   } catch {
     return 1;
   }
