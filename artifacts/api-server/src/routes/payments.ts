@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { db, bookingsTable, seatsTable, pricingTable } from "@workspace/db";
 import { InitiatePaymentBody, ConfirmPaymentBody } from "@workspace/api-zod";
 import crypto from "crypto";
+import { validTokens } from "./admin";
+
 
 const router: IRouter = Router();
 
@@ -11,10 +13,10 @@ function getSectionForSeat(seat: typeof seatsTable.$inferSelect, room2IsAc: bool
   if (seat.room === 2) return room2IsAc ? "AC" : "NON_AC";
   return "NON_AC";
 }
-
 function isValidAdmin(token: string | string[] | undefined): boolean {
-  return !!process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET;
+  return typeof token === "string" && validTokens.has(token);
 }
+
 
 // UPI QR payment flow — booking stays "pending" until admin manually confirms
 // This endpoint records intent; no charge is processed here
