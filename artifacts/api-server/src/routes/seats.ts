@@ -7,6 +7,7 @@ import {
   UpdateSeatParams,
   UpdateSeatBody,
 } from "@workspace/api-zod";
+import { validTokens } from "./admin";
 
 const router: IRouter = Router();
 
@@ -66,7 +67,6 @@ router.get("/seats", async (req, res): Promise<void> => {
   let activeBookings: Array<{ seatId: number; id: number; customerName: string }> = [];
 
   if (params.startDate && params.endDate) {
-    // Date-range overlap query: find confirmed bookings that overlap [startDate, endDate]
     const { startDate, endDate } = params;
     activeBookings = await db
       .select({ seatId: bookingsTable.seatId, id: bookingsTable.id, customerName: bookingsTable.customerName })
@@ -75,13 +75,11 @@ router.get("/seats", async (req, res): Promise<void> => {
         and(
           eq(bookingsTable.status, "confirmed"),
           or(
-            // Booking has explicit dates: use date overlap
             and(
               isNotNull(bookingsTable.startDate),
               lte(bookingsTable.startDate, endDate),
               gte(bookingsTable.endDate, startDate)
             ),
-            // Legacy bookings without dates: use month-overlap fallback
             and(
               isNull(bookingsTable.startDate),
               lte(bookingsTable.month, endDate.substring(0, 7)),
@@ -91,7 +89,6 @@ router.get("/seats", async (req, res): Promise<void> => {
         )
       );
   } else if (params.month) {
-    // Legacy month-based query
     const { month } = params;
     activeBookings = await db
       .select({ seatId: bookingsTable.seatId, id: bookingsTable.id, customerName: bookingsTable.customerName })
@@ -112,7 +109,6 @@ router.get("/seats", async (req, res): Promise<void> => {
   const result = seats.map((seat) => {
     const booking = (params.startDate || params.month) ? activeBookings.find((b) => b.seatId === seat.id) : undefined;
 
-    // Check offline booking overlap with the requested date range
     let offlineOverlaps = seat.isOfflineBooked;
     if (seat.isOfflineBooked && filterStart && filterEnd) {
       const from = seat.offlineBookingFrom;
@@ -124,7 +120,6 @@ router.get("/seats", async (req, res): Promise<void> => {
       } else if (from) {
         offlineOverlaps = from <= filterEnd;
       }
-      // Also check that booking hasn't expired
       if (seat.offlineBookingUntil && seat.offlineBookingUntil < today) {
         offlineOverlaps = false;
       }
@@ -165,8 +160,8 @@ router.get("/seats/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/seats/:id", async (req, res): Promise<void> => {
-  const adminToken = req.headers["x-admin-token"];
-  if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
+  const adminToken = req.headers["x-admin-token"] as string;
+  if (!validTokens.has(adminToken)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
