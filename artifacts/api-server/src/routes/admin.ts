@@ -13,7 +13,7 @@ router.post("/admin/login", async (req, res): Promise<void> => {
     return;
   }
 
-  if (body.data.password !== ADMIN_PASSWORD) {
+  if (!ADMIN_PASSWORD || body.data.password !== ADMIN_PASSWORD) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
