@@ -9,6 +9,8 @@ import {
   UpdateBookingBody,
   GetBookingSummaryQueryParams,
 } from "@workspace/api-zod";
+import { validTokens } from "./admin";
+
 
 const router: IRouter = Router();
 
@@ -305,12 +307,13 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Booking not found" });
     return;
   }
+const adminToken = req.headers["x-admin-token"] as string;
+  if (!validTokens.has(adminToken)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
 
-  const seat = await db.select().from(seatsTable).where(eq(seatsTable.id, booking[0].seatId)).limit(1);
-  const pricingRow = await db.select().from(pricingTable).limit(1);
-  const room2IsAc = pricingRow[0]?.room2IsAc ?? false;
-  res.json(formatBooking(booking[0], seat[0], room2IsAc));
-});
+ 
 
 router.patch("/bookings/:id", async (req, res): Promise<void> => {
   const adminToken = req.headers["x-admin-token"];
