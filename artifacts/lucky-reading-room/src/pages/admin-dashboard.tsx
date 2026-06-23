@@ -108,9 +108,10 @@ function OfflineForm({
     until: seat.offlineBookingUntil ?? format(addMonths(new Date(), 1), "yyyy-MM-dd"),
   });
 
-  const numMonths = countMonthsInRange(form.from, form.until);
+  const days = Math.max(1, Math.round((new Date(form.until).getTime() - new Date(form.from).getTime()) / (1000 * 60 * 60 * 24)));
   const monthlyPrice = seat.isAC ? (pricing?.acPrice1m ?? 2000) : (pricing?.nonAcPrice1m ?? 1500);
-  const totalPrice = numMonths * monthlyPrice;
+  const dailyRate = Math.round(monthlyPrice / 30);
+  const totalPrice = days * dailyRate;
 
   return (
     <div className="mt-2 p-3 rounded-lg bg-orange-50 border border-orange-100 space-y-2">
@@ -137,7 +138,7 @@ function OfflineForm({
         </div>
       </div>
       <div className="bg-white rounded-lg px-3 py-2 border border-orange-100 flex items-center justify-between">
-        <span className="text-xs text-gray-500">~{numMonths} mo × ₹{monthlyPrice.toLocaleString("en-IN")}/mo</span>
+        <span className="text-xs text-gray-500">{days} day{days !== 1 ? "s" : ""} × ₹{dailyRate.toLocaleString("en-IN")}/day</span>
         <span className="text-sm font-bold text-primary">₹{totalPrice.toLocaleString("en-IN")}</span>
       </div>
       <div className="flex gap-2">
