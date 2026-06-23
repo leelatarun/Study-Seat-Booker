@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 const router: IRouter = Router();
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 router.post("/admin/login", async (req, res): Promise<void> => {
   const body = AdminLoginBody.safeParse(req.body);
@@ -19,7 +19,7 @@ router.post("/admin/login", async (req, res): Promise<void> => {
   }
 
   const token = crypto.randomUUID();
-  res.json({ success: true, token: "admin123" });
+  res.json({ success: true, token });
 });
 
 export default router;

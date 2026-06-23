@@ -10,6 +10,11 @@ function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+function validatePhone(raw: string): boolean {
+  const stripped = raw.replace(/^\+?91/, "").trim();
+  return /^[6-9]\d{9}$/.test(stripped);
+}
+
 function formatDisplayDate(yyyyMmDd: string): string {
   try {
     const [y, m, d] = yyyyMmDd.split("-").map(Number);
@@ -243,9 +248,11 @@ export default function Book() {
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 required
-                minLength={10}
                 className="bg-gray-50 border-gray-200"
               />
+              {form.phone && !validatePhone(form.phone) && (
+                <p className="text-xs text-red-500">Please enter a valid 10-digit Indian mobile number</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -271,7 +278,7 @@ export default function Book() {
             <Button
               type="submit"
               className="w-full h-11 text-base font-semibold"
-              disabled={createBooking.isPending || days <= 0}
+              disabled={createBooking.isPending || days <= 0 || !form.phone || !validatePhone(form.phone)}
             >
               {createBooking.isPending
                 ? "Submitting..."

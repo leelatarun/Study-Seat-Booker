@@ -166,10 +166,7 @@ router.get("/seats/:id", async (req, res): Promise<void> => {
 
 router.patch("/seats/:id", async (req, res): Promise<void> => {
   const adminToken = req.headers["x-admin-token"];
-  const validToken =
-    adminToken === "admin123" ||
-    (!!process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET);
-  if (!validToken) {
+  if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

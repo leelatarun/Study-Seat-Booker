@@ -32,7 +32,7 @@ router.get("/pricing", async (_req, res): Promise<void> => {
 
 router.patch("/pricing", async (req, res): Promise<void> => {
   const adminToken = req.headers["x-admin-token"];
-  if (adminToken !== process.env.ADMIN_SECRET && adminToken !== "admin123") {
+  if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

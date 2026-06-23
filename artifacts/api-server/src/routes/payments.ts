@@ -13,10 +13,7 @@ function getSectionForSeat(seat: typeof seatsTable.$inferSelect, room2IsAc: bool
 }
 
 function isValidAdmin(token: string | string[] | undefined): boolean {
-  return (
-    token === "admin123" ||
-    (!!process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET)
-  );
+  return !!process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET;
 }
 
 // UPI QR payment flow — booking stays "pending" until admin manually confirms

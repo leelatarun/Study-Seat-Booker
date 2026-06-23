@@ -1,0 +1,74 @@
+Here is the complete prompt, copy the entire thing:
+
+---
+
+Fix the following issues in this project. Work one at a time. Do not refactor anything unrelated.
+
+ISSUE 1 — Replace hardcoded admin123 with secure credentials
+
+In artifacts/api-server/src/routes/admin.ts:
+- The login route generates a UUID token but returns the hardcoded string "admin123" instead. Fix it to return the actual generated UUID token.
+- Keep ADMIN_PASSWORD reading from process.env.ADMIN_PASSWORD but remove the ?? "admin123" fallback entirely.
+
+In artifacts/api-server/src/routes/bookings.ts, seats.ts, payments.ts, and pricing.ts:
+- Remove every instance of || adminToken === "admin123" and || token === "admin123". Make process.env.ADMIN_SECRET the only accepted token.
+
+In artifacts/lucky-reading-room/src/pages/admin-dashboard.tsx:
+- Replace every hardcoded "x-admin-token": "admin123" with "x-admin-token": localStorage.getItem("adminToken") ?? ""
+
+ISSUE 2 — Fix offline seat booking price calculation
+
+Replace the countMonthsInRange function in artifacts/lucky-reading-room/src/pages/admin-dashboard.tsx with this exact implementation:
+
+function countMonthsInRange(from: string, until: string): number {
+  try {
+    const parseYM = (s: string) => {
+      const parts = s.split("-").map(Number);
+      return { year: parts[0], month: parts[1] };
+    };
+    const f = parseYM(from);
+    const u = parseYM(until);
+    return Math.max(1, (u.year - f.year) * 12 + (u.month - f.month) + 1);
+  } catch {
+    return 1;
+  }
+}
+
+ISSUE 3 — Protect GET /api/bookings from public access
+
+In artifacts/api-server/src/routes/bookings.ts, add an admin token check at the top of the GET /bookings route handler:
+
+const adminToken = req.headers["x-admin-token"];
+if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
+  res.status(401).json({ error: "Unauthorized" });
+  return;
+}
+
+Also install express-rate-limit and apply a limiter of 20 requests per minute per IP on the POST /bookings and POST /payments/initiate routes inside artifacts/api-server/src/app.ts.
+
+ISSUE 4 — Connect Neon as the database
+
+In lib/db/src/index.ts, update the database connection to read from process.env.NEON_DATABASE_URL instead of process.env.DATABASE_URL.
+
+After making this change, run: pnpm --filter @workspace/db run push
+
+Confirm the migration completes without errors and all tables are created in Neon.
+
+ISSUE 5 — Validate Indian phone number format on booking form
+
+In the booking form where customers enter their phone number, add validation that enforces Indian mobile number standards:
+- Must be exactly 10 digits
+- Must start with 6, 7, 8, or 9
+- Optionally allow +91 or 91 prefix which should be stripped before validation
+- Show an inline error message "Please enter a valid 10-digit Indian mobile number" if the format is wrong
+- Disable the Next/Submit button until the phone number passes validation
+
+Apply this validation in artifacts/lucky-reading-room/src/pages/book.tsx on the phone input field. Use this regex for validation: /^[6-9]\d{9}$/ applied after stripping any +91 or 91 prefix.
+
+Also apply the same validation in artifacts/lucky-reading-room/src/pages/admin-dashboard.tsx on the phone field inside the OfflineForm component and the AdminBookingForm component.
+
+Do not change anything else. Do not upgrade dependencies. Do not restructure files.
+
+---
+
+Paste the whole thing into the agent and send it.

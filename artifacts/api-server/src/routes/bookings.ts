@@ -151,6 +151,11 @@ router.get("/bookings/summary", async (req, res): Promise<void> => {
 });
 
 router.get("/bookings", async (req, res): Promise<void> => {
+  const adminToken = req.headers["x-admin-token"];
+  if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
   const query = ListBookingsQueryParams.safeParse(req.query);
   const month = query.success ? query.data.month : undefined;
   const allSeats = await db.select().from(seatsTable);
@@ -309,10 +314,7 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
 
 router.patch("/bookings/:id", async (req, res): Promise<void> => {
   const adminToken = req.headers["x-admin-token"];
-  const validToken =
-    adminToken === "admin123" ||
-    (!!process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET);
-  if (!validToken) {
+  if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

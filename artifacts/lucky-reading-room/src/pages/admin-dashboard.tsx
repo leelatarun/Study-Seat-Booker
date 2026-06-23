@@ -45,9 +45,13 @@ function nextMonth(ym: string): string {
 
 function countMonthsInRange(from: string, until: string): number {
   try {
-    const f = from.length === 7 ? new Date(from + "-01") : new Date(from);
-    const u = until.length === 7 ? new Date(until + "-01") : new Date(until);
-    return Math.max(1, (u.getFullYear() - f.getFullYear()) * 12 + (u.getMonth() - f.getMonth()) + 1);
+    const parseYM = (s: string) => {
+      const parts = s.split("-").map(Number);
+      return { year: parts[0], month: parts[1] };
+    };
+    const f = parseYM(from);
+    const u = parseYM(until);
+    return Math.max(1, (u.year - f.year) * 12 + (u.month - f.month) + 1);
   } catch {
     return 1;
   }
@@ -78,6 +82,11 @@ function bookingPeriodLabel(b: Booking): string {
 
 function todayStr(): string {
   return format(new Date(), "yyyy-MM-dd");
+}
+
+function validatePhone(raw: string): boolean {
+  const stripped = raw.replace(/^\+?91/, "").trim();
+  return /^[6-9]\d{9}$/.test(stripped);
 }
 
 // ──── Offline booking form ─────────────────────────────────────────────────
@@ -114,6 +123,9 @@ function OfflineForm({
         <div>
           <Label className="text-xs text-gray-500">Phone</Label>
           <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-8 text-sm bg-white" placeholder="Phone" />
+          {form.phone && !validatePhone(form.phone) && (
+            <p className="text-[10px] text-red-500 mt-0.5">Please enter a valid 10-digit Indian mobile number</p>
+          )}
         </div>
         <div>
           <Label className="text-xs text-gray-500">From</Label>
@@ -129,7 +141,7 @@ function OfflineForm({
         <span className="text-sm font-bold text-primary">₹{totalPrice.toLocaleString("en-IN")}</span>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" className="h-7 text-xs" onClick={() => onSave(form)}>Save</Button>
+        <Button size="sm" className="h-7 text-xs" onClick={() => onSave(form)} disabled={!validatePhone(form.phone)}>Save</Button>
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
@@ -148,7 +160,7 @@ function AdminBookingForm({
   pricing: any;
   onSuccess: () => void;
 }) {
-  const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
+  const adminReq = { headers: { "x-admin-token": localStorage.getItem("adminToken") ?? "" } } as RequestInit;
   const createBooking = useCreateBooking();
   const confirmPayment = useConfirmPayment({ request: adminReq });
 
@@ -201,6 +213,9 @@ function AdminBookingForm({
         <div>
           <Label className="text-xs text-gray-500">Phone *</Label>
           <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-8 text-sm bg-white" placeholder="Phone" />
+          {form.phone && !validatePhone(form.phone) && (
+            <p className="text-[10px] text-red-500 mt-0.5">Please enter a valid 10-digit Indian mobile number</p>
+          )}
         </div>
         <div>
           <Label className="text-xs text-gray-500">Email</Label>
@@ -223,7 +238,7 @@ function AdminBookingForm({
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex gap-2">
-        <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={saving}>
+        <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={saving || !validatePhone(form.phone)}>
           {saving ? "Saving…" : "Create & Confirm"}
         </Button>
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onClose}>Cancel</Button>
@@ -258,7 +273,7 @@ function DashboardView() {
   );
   const { data: pricing } = useGetPricing({ query: { queryKey: getGetPricingQueryKey() } });
 
-  const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
+  const adminReq = { headers: { "x-admin-token": localStorage.getItem("adminToken") ?? "" } } as RequestInit;
   const updateSeat = useUpdateSeat({ request: adminReq });
   const updatePricing = useUpdatePricing({ request: adminReq });
   const updateBooking = useUpdateBooking({ request: adminReq });
@@ -568,7 +583,7 @@ function ManagementListView() {
   const { data: allBookings = [] } = useListBookings({}, { query: { queryKey: getListBookingsQueryKey({}) } });
   const { data: pricing } = useGetPricing({ query: { queryKey: getGetPricingQueryKey() } });
 
-  const adminReq = { headers: { "x-admin-token": "admin123" } } as RequestInit;
+  const adminReq = { headers: { "x-admin-token": localStorage.getItem("adminToken") ?? "" } } as RequestInit;
   const updateSeat = useUpdateSeat({ request: adminReq });
   const updateBooking = useUpdateBooking({ request: adminReq });
   const confirmPayment = useConfirmPayment({ request: adminReq });
